@@ -10,7 +10,8 @@
     <nav class="top-tabs" aria-label="Secciones">
       <button type="button" id="pdfTab" class="active">[PDF] PDF</button>
       <button type="button" id="ticketsTab">[#] Tickets</button>
-      <button type="button" id="colaTab">[🖨] Cola</button>
+      <button type="button" id="colaTab">[ðŸ–¨] Cola</button>
+      <button type="button" id="historialTab">📋 Historial</button>
     </nav>
 
     <main class="app-shell">
@@ -18,38 +19,33 @@
         <div id="status" class="status">Cargando trabajo de impresion...</div>
         <div id="pages" class="pages"></div>
 
-        <!-- ── TAB TICKETS ── -->
+        <!-- â”€â”€ TAB TICKETS â”€â”€ -->
         <div id="ticketsView" class="tickets-view" hidden>
           <div class="tickets-head">
             <div>
               <p class="eyebrow">Tickets</p>
-              <h2>Tickets del día</h2>
+              <h2>Tickets del dÃ­a</h2>
             </div>
             <div class="ticket-tools">
-              <label>
-                <span>Impresora tickets</span>
-                <select id="ticketPrinterSelect"></select>
-              </label>
-              <button type="button" id="toggleAutoPrintButton" class="small-button">⏸ Pausar auto</button>
               <button type="button" id="refreshTicketsButton" class="small-button">Actualizar</button>
             </div>
           </div>
-          <p id="ticketAutoStatus" class="auto-status">Autoimpresion activa.</p>
+          <p id="ticketAutoStatus" class="auto-status">Los tickets se imprimen solo desde la cola.</p>
           <div class="queue-toolbar">
             <div class="queue-select-group">
               <button type="button" id="selectAllButton" class="small-button secondary">Todos</button>
               <button type="button" id="selectNoneButton" class="small-button secondary">Ninguno</button>
             </div>
-            <button type="button" id="printSelectedButton" class="small-button">🖨 Imprimir seleccionados</button>
+            <button type="button" id="printSelectedButton" class="small-button">Enviar seleccionados a cola</button>
           </div>
           <div id="ticketsList" class="tickets-list"></div>
         </div>
 
-        <!-- ── TAB COLA ── -->
+        <!-- â”€â”€ TAB COLA â”€â”€ -->
         <div id="colaView" class="tickets-view" hidden>
           <div class="tickets-head">
             <div>
-              <p class="eyebrow">Cola de impresión</p>
+              <p class="eyebrow">Cola de impresiÃ³n</p>
               <h2>Trabajos en cola</h2>
             </div>
             <div class="ticket-tools">
@@ -58,18 +54,46 @@
           </div>
           <div id="colaContent"></div>
         </div>
+        <!-- ── TAB HISTORIAL ── -->
+        <div id="historialView" class="historial-view" hidden>
+          <div class="historial-head">
+            <div>
+              <p class="eyebrow">Registros</p>
+              <h2>Historial</h2>
+            </div>
+            <button type="button" id="clearHistorialButton" class="small-button secondary">Limpiar todo</button>
+          </div>
+
+          <div class="historial-cols">
+            <section class="historial-section">
+              <div class="historial-section-header">
+                <span class="historial-section-title">Archivos abiertos</span>
+                <span id="fileHistoryCount" class="ticket-group-badge">0</span>
+              </div>
+              <div id="fileHistoryList" class="historial-items"></div>
+            </section>
+
+            <section class="historial-section">
+              <div class="historial-section-header">
+                <span class="historial-section-title">Impresiones realizadas</span>
+                <span id="printHistoryCount" class="ticket-group-badge">0</span>
+              </div>
+              <div id="printHistoryList" class="historial-items"></div>
+            </section>
+          </div>
+        </div>
       </section>
 
       <aside class="panel">
         <header>
           <p class="eyebrow">IMPRESS Print</p>
-          <h1>Revisar e imprimir</h1>
+          <h1>Trabajo actual</h1>
         </header>
 
         <section class="card collapsible" id="cardArchivo">
           <button type="button" class="collapse-toggle">
             <p class="label">Archivo</p>
-            <span class="collapse-arrow">▾</span>
+            <span class="collapse-arrow">â–¾</span>
           </button>
           <div class="collapse-body">
             <h2 id="fileName">-</h2>
@@ -79,68 +103,18 @@
 
         <section class="card card-light print-card collapsible" id="cardImpresion">
           <button type="button" class="collapse-toggle">
-            <h3 style="margin:0">Cuadro de impresion</h3>
-            <span class="collapse-arrow">▾</span>
+            <h3 style="margin:0">Preparar PDF</h3>
+            <span class="collapse-arrow">â–¾</span>
           </button>
           <div class="collapse-body">
-            <label class="field">
-              <span><span class="icon">PR</span> Impresora</span>
-              <select id="printerSelect"></select>
-            </label>
-            <div class="field-grid">
-              <label class="field">
-                <span><span class="icon">CP</span> Copias</span>
-                <input id="copiesInput" type="number" min="1" value="1" />
-              </label>
-              <label class="field">
-                <span><span class="icon">PG</span> Papel</span>
-                <select id="paperSelect">
-                  <option value="A4">A4</option>
-                  <option value="A3">A3</option>
-                  <option value="ticket80">Ticket 80mm</option>
-                  <option value="Letter">Carta</option>
-                  <option value="Legal">Legal</option>
-                </select>
-              </label>
-            </div>
-            <label class="field">
-              <span><span class="icon">OR</span> Orientacion</span>
-              <select id="orientationSelect">
-                <option value="portrait">Vertical</option>
-                <option value="landscape">Horizontal</option>
-              </select>
-            </label>
-            <div class="segmented" role="group" aria-label="Color">
-              <button type="button" id="bwButton" data-value="bw"><span class="icon">BN</span> B&N</button>
-              <button type="button" id="colorButton" data-value="color"><span class="icon">CL</span> Color</button>
-            </div>
-            <label class="field">
-              <span><span class="icon">DF</span> Faz</span>
-              <select id="duplexSelect">
-                <option value="simplex">Simple faz</option>
-                <option value="longEdge">Doble faz lado largo</option>
-                <option value="shortEdge">Doble faz lado corto</option>
-              </select>
-            </label>
-            <label class="field">
-              <span><span class="icon">#</span> Paginas</span>
-              <input id="rangeInput" type="text" placeholder="Todas o 1-3,5" />
-            </label>
-            <label class="field">
-              <span><span class="icon">%</span> Escala</span>
-              <select id="scaleSelect">
-                <option value="100">100%</option>
-                <option value="95">Ajustar un poco</option>
-                <option value="90">Reducir</option>
-              </select>
-            </label>
+            <div id="pdfOptionsContainer" class="pdf-options"></div><p class="device-note">Configura el PDF aca y agregalo a la cola. La impresion solo se aprueba desde la pestana Cola.</p>
           </div>
         </section>
 
         <section class="card collapsible" id="cardPedido">
           <button type="button" class="collapse-toggle">
             <p class="label">Pedido</p>
-            <span class="collapse-arrow">▾</span>
+            <span class="collapse-arrow">â–¾</span>
           </button>
           <div class="collapse-body">
             <dl id="orderList"></dl>
@@ -150,7 +124,7 @@
         <section class="card collapsible collapsed" id="cardPerfil">
           <button type="button" class="collapse-toggle">
             <p class="label">Perfil detectado</p>
-            <span class="collapse-arrow">▾</span>
+            <span class="collapse-arrow">â–¾</span>
           </button>
           <div class="collapse-body">
             <dl id="configList"></dl>
@@ -160,12 +134,29 @@
         <p id="message" class="message" hidden></p>
 
         <div class="actions">
-          <button id="printButton" class="button-primary" disabled>Aceptar / Imprimir</button>
-          <button id="systemPrintButton" class="button-secondary" disabled>Impresion del sistema</button>
+          <button id="printButton" class="button-primary" disabled>Agregar a cola</button>
           <button id="closeButton" class="button-secondary">Cerrar</button>
         </div>
       </aside>
     </main>
+
+    <div id="errorModal" class="error-modal" hidden>
+      <div class="error-dialog" role="dialog" aria-modal="true" aria-labelledby="errorModalTitle">
+        <div class="error-dialog-head">
+          <div>
+            <p class="eyebrow">Logger de error</p>
+            <h2 id="errorModalTitle">Error</h2>
+          </div>
+          <button type="button" id="errorModalCloseIcon" class="error-icon-button" aria-label="Cerrar">x</button>
+        </div>
+        <p id="errorModalSummary" class="error-summary"></p>
+        <pre id="errorModalDetails" class="error-details"></pre>
+        <div class="error-actions">
+          <button type="button" id="errorModalCopy" class="button-secondary">Copiar log</button>
+          <button type="button" id="errorModalClose" class="button-primary">Cerrar</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="./renderer.js"></script>
   </body>

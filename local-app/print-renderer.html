@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>IMPRESS Print Range</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: white;
+      }
+
+      .page {
+        display: block;
+        width: 100%;
+        height: auto;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="./print-renderer.js"></script>
+  </body>
+</html>

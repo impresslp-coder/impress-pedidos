@@ -1,5 +1,6 @@
 const path = require("path");
 const fs = require("fs");
+const { execFile } = require("child_process");
 const { app, BrowserWindow, ipcMain } = require("electron");
 
 const userDataPath = path.join(process.env.LOCALAPPDATA || app.getPath("appData"), "IMPRESS Print");
@@ -45,7 +46,7 @@ function parseProtocolUrl(protocolUrl) {
 function createWindow(protocolUrl) {
   const parsed = parseProtocolUrl(protocolUrl);
 
-  // Si llegó una clave, guardarla en config para el modo standalone.
+  // Si llegÃ³ una clave, guardarla en config para el modo standalone.
   if (parsed.base && parsed.key) {
     saveConfig({ base: parsed.base, key: parsed.key });
   }
@@ -81,18 +82,51 @@ function createWindow(protocolUrl) {
 ipcMain.handle("print:get-printers", async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return [];
   const printers = await mainWindow.webContents.getPrintersAsync();
-  return printers.map((printer) => ({
+  return await Promise.all(printers.map(async (printer) => ({
     name: printer.name,
     displayName: printer.displayName || printer.name,
     isDefault: printer.isDefault,
     status: printer.status,
-  }));
+    papers: await getPrinterPaperSizes(printer.name),
+  })));
 });
 
-function buildPrintOptions(options) {
-  const pageSize = options.paperSize === "ticket80"
-    ? { width: 80000, height: 297000 }
-    : options.paperSize || "A4";
+function getPrinterPaperSizes(printerName) {
+  if (process.platform !== "win32" || !printerName) return Promise.resolve([]);
+
+  const script = `
+    Add-Type -AssemblyName System.Drawing
+    $printerName = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(printerName, "utf8").toString("base64")}'))
+    $doc = New-Object System.Drawing.Printing.PrintDocument
+    $doc.PrinterSettings.PrinterName = $printerName
+    $doc.PrinterSettings.PaperSizes | ForEach-Object {
+      [PSCustomObject]@{
+        name = $_.PaperName
+        displayName = $_.PaperName
+        widthMicrons = [int][Math]::Round($_.Width * 254)
+        heightMicrons = [int][Math]::Round($_.Height * 254)
+      }
+    } | ConvertTo-Json -Compress
+  `;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+
+  return new Promise((resolve) => {
+    execFile("powershell.exe", ["-NoProfile", "-EncodedCommand", encoded], { windowsHide: true }, (_err, stdout) => {
+      try {
+        const data = JSON.parse(stdout.trim() || "[]");
+        const list = Array.isArray(data) ? data : [data];
+        resolve(list.filter((paper) => paper?.name && paper.widthMicrons && paper.heightMicrons));
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+}
+
+function buildPrintOptions(options = {}) {
+  const pageSize = options.paperWidthMicrons && options.paperHeightMicrons
+    ? { width: Number(options.paperWidthMicrons), height: Number(options.paperHeightMicrons) }
+    : options.paperSize || undefined;
 
   const printOptions = {
     silent: true,
@@ -103,9 +137,11 @@ function buildPrintOptions(options) {
     copies: Math.max(1, Number(options.copies) || 1),
     collate: true,
     duplexMode: options.duplexMode || "simplex",
-    pageSize,
     scaleFactor: Number(options.scaleFactor) || 100,
   };
+
+  if (pageSize) printOptions.pageSize = pageSize;
+  else printOptions.usePrinterDefaultPageSize = true;
 
   if (Array.isArray(options.pageRanges) && options.pageRanges.length) {
     printOptions.pageRanges = options.pageRanges;
@@ -127,13 +163,14 @@ ipcMain.handle("print:run", async (_event, options = {}) => {
   });
 });
 
-// Imprime un PDF directamente desde su URL.
-// Se carga en una ventana fuera de pantalla (visible pero desplazada):
-// el visor de PDF de Chromium requiere que la ventana sea visible para inicializarse.
+// Carga el PDF en una ventana auxiliar y lo envia silenciosamente con las
+// opciones aprobadas dentro de IMPRESS Print.
 ipcMain.handle("print:pdf-url", async (_event, { pdfUrl, options = {} }) => {
   const { screen } = require("electron");
   const display = screen.getPrimaryDisplay();
-  const offX = display.bounds.x + display.bounds.width + 100; // justo fuera del borde derecho
+  const offX = display.bounds.x + display.bounds.width + 100;
+  const hasPageRanges = Array.isArray(options.pageRanges) && options.pageRanges.length > 0;
+  const rendererLogs = [];
 
   const hidden = new BrowserWindow({
     show: true,
@@ -147,27 +184,95 @@ ipcMain.handle("print:pdf-url", async (_event, { pdfUrl, options = {} }) => {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: false,
+      backgroundThrottling: false,
       plugins: true,
     },
   });
+  hidden.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    rendererLogs.push({ type: "console", level, message, line, sourceId });
+  });
+  hidden.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    rendererLogs.push({ type: "did-fail-load", errorCode, errorDescription, validatedURL });
+  });
+  hidden.webContents.on("render-process-gone", (_event, details) => {
+    rendererLogs.push({ type: "render-process-gone", details });
+  });
+  hidden.webContents.on("unresponsive", () => {
+    rendererLogs.push({ type: "unresponsive" });
+  });
 
   try {
-    await hidden.loadURL(pdfUrl);
-    // Esperar a que el visor de PDF de Chromium renderice el contenido.
-    // did-finish-load dispara antes de que el PDF esté listo, por eso se usa un delay.
-    await new Promise((r) => setTimeout(r, 3000));
+    if (hasPageRanges) {
+      rendererLogs.push({ type: "load-renderer", pdfUrl, pageRanges: options.pageRanges });
+      await hidden.loadFile(path.join(__dirname, "print-renderer.html"), {
+        query: {
+          pdfUrl,
+          ranges: JSON.stringify(options.pageRanges),
+        },
+      });
+      await waitForPrintRenderer(hidden, rendererLogs);
+    } else {
+      rendererLogs.push({ type: "load-pdf-viewer", pdfUrl });
+      await hidden.loadURL(pdfUrl);
+      // Esperar a que el visor de PDF de Chromium renderice el contenido.
+      // did-finish-load dispara antes de que el PDF este listo, por eso se usa un delay.
+      await new Promise((r) => setTimeout(r, 3000));
+    }
 
     return await new Promise((resolve, reject) => {
-      hidden.webContents.print(buildPrintOptions(options), (success, failureReason) => {
+      const printOptions = hasPageRanges ? { ...options, pageRanges: undefined } : options;
+      rendererLogs.push({ type: "print", printOptions: buildPrintOptions(printOptions) });
+      hidden.webContents.print(buildPrintOptions(printOptions), (success, failureReason) => {
         if (success) resolve({ ok: true });
-        else reject(new Error(failureReason || "La impresora rechazo el trabajo"));
+        else reject(new Error(formatPrintError(failureReason || "La impresora rechazo el trabajo", rendererLogs)));
       });
     });
+  } catch (error) {
+    const message = error?.message || String(error);
+    throw new Error(message.includes("Contexto tecnico:")
+      ? message
+      : formatPrintError(message, rendererLogs));
   } finally {
     if (!hidden.isDestroyed()) hidden.close();
   }
 });
 
+function formatPrintError(message, logs) {
+  const safeLogs = Array.isArray(logs) ? logs.slice(-80) : [];
+  return [
+    message,
+    "",
+    "Contexto tecnico:",
+    JSON.stringify(safeLogs, null, 2),
+  ].join("\n");
+}
+
+async function waitForPrintRenderer(window, logs = []) {
+  let lastState = null;
+  let renderedLogCount = 0;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const state = await window.webContents.executeJavaScript(`({
+      ready: Boolean(window.__IMPRESS_PRINT_READY__),
+      error: window.__IMPRESS_PRINT_ERROR__ || "",
+      logs: window.__IMPRESS_PRINT_LOGS__ || [],
+      href: window.location.href,
+      readyState: document.readyState,
+      canvasCount: document.querySelectorAll("canvas").length,
+      renderedCount: document.querySelectorAll("canvas[data-rendered='true']").length,
+      bodyText: document.body ? document.body.innerText.slice(0, 500) : ""
+    })`);
+    lastState = state;
+    if (state.logs?.length > renderedLogCount) {
+      logs.push(...state.logs.slice(renderedLogCount).map((entry) => ({ type: "renderer-log", ...entry })));
+      renderedLogCount = state.logs.length;
+    }
+    if (state.error) throw new Error(formatPrintError(state.error, logs));
+    if (state.ready) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  logs.push({ type: "timeout-state", state: lastState });
+  throw new Error(formatPrintError("No se pudo preparar la tanda para imprimir", logs));
+}
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -187,7 +292,7 @@ if (!gotLock) {
         mainWindow.webContents.send("new-job", { job, base, key });
       }
     } else {
-      // Si por alguna razón no hay ventana, crear una nueva.
+      // Si por alguna razÃ³n no hay ventana, crear una nueva.
       createWindow(protocolUrl);
     }
   });
