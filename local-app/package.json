@@ -1,0 +1,6 @@
+{
+  "name": "impress-print",
+  "version": "0.1.0",
+  "main": "electron-main.cjs",
+  "private": true
+}

@@ -1,0 +1,22 @@
+.env.local
+.env*.local
+node_modules/
+.next/
+out/
+
+# Electron build output
+local-app/dist/
+dist/
+release/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

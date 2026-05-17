@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-brand: #1a1a2e;       /* Azul noche */
+  --color-brand-dark: #16213e;
+  --color-brand-light: #0f3460;
+  --color-accent: #f5a623;      /* Amarillo imprenta */
+  --color-accent-dark: #d4881a;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+@media print {
+  .no-print { display: none !important; }
+}

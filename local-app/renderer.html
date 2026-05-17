@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IMPRESS Print</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <nav class="top-tabs" aria-label="Secciones">
+      <button type="button" id="pdfTab" class="active">[PDF] PDF</button>
+      <button type="button" id="ticketsTab">[#] Tickets</button>
+      <button type="button" id="colaTab">[🖨] Cola</button>
+    </nav>
+
+    <main class="app-shell">
+      <section class="viewer">
+        <div id="status" class="status">Cargando trabajo de impresion...</div>
+        <div id="pages" class="pages"></div>
+
+        <!-- ── TAB TICKETS ── -->
+        <div id="ticketsView" class="tickets-view" hidden>
+          <div class="tickets-head">
+            <div>
+              <p class="eyebrow">Tickets</p>
+              <h2>Tickets del día</h2>
+            </div>
+            <div class="ticket-tools">
+              <label>
+                <span>Impresora tickets</span>
+                <select id="ticketPrinterSelect"></select>
+              </label>
+              <button type="button" id="toggleAutoPrintButton" class="small-button">⏸ Pausar auto</button>
+              <button type="button" id="refreshTicketsButton" class="small-button">Actualizar</button>
+            </div>
+          </div>
+          <p id="ticketAutoStatus" class="auto-status">Autoimpresion activa.</p>
+          <div class="queue-toolbar">
+            <div class="queue-select-group">
+              <button type="button" id="selectAllButton" class="small-button secondary">Todos</button>
+              <button type="button" id="selectNoneButton" class="small-button secondary">Ninguno</button>
+            </div>
+            <button type="button" id="printSelectedButton" class="small-button">🖨 Imprimir seleccionados</button>
+          </div>
+          <div id="ticketsList" class="tickets-list"></div>
+        </div>
+
+        <!-- ── TAB COLA ── -->
+        <div id="colaView" class="tickets-view" hidden>
+          <div class="tickets-head">
+            <div>
+              <p class="eyebrow">Cola de impresión</p>
+              <h2>Trabajos en cola</h2>
+            </div>
+            <div class="ticket-tools">
+              <button type="button" id="colaRefreshButton" class="small-button">Actualizar</button>
+            </div>
+          </div>
+          <div id="colaContent"></div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <header>
+          <p class="eyebrow">IMPRESS Print</p>
+          <h1>Revisar e imprimir</h1>
+        </header>
+
+        <section class="card collapsible" id="cardArchivo">
+          <button type="button" class="collapse-toggle">
+            <p class="label">Archivo</p>
+            <span class="collapse-arrow">▾</span>
+          </button>
+          <div class="collapse-body">
+            <h2 id="fileName">-</h2>
+            <p id="pageCount" class="muted">-</p>
+          </div>
+        </section>
+
+        <section class="card card-light print-card collapsible" id="cardImpresion">
+          <button type="button" class="collapse-toggle">
+            <h3 style="margin:0">Cuadro de impresion</h3>
+            <span class="collapse-arrow">▾</span>
+          </button>
+          <div class="collapse-body">
+            <label class="field">
+              <span><span class="icon">PR</span> Impresora</span>
+              <select id="printerSelect"></select>
+            </label>
+            <div class="field-grid">
+              <label class="field">
+                <span><span class="icon">CP</span> Copias</span>
+                <input id="copiesInput" type="number" min="1" value="1" />
+              </label>
+              <label class="field">
+                <span><span class="icon">PG</span> Papel</span>
+                <select id="paperSelect">
+                  <option value="A4">A4</option>
+                  <option value="A3">A3</option>
+                  <option value="ticket80">Ticket 80mm</option>
+                  <option value="Letter">Carta</option>
+                  <option value="Legal">Legal</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span><span class="icon">OR</span> Orientacion</span>
+              <select id="orientationSelect">
+                <option value="portrait">Vertical</option>
+                <option value="landscape">Horizontal</option>
+              </select>
+            </label>
+            <div class="segmented" role="group" aria-label="Color">
+              <button type="button" id="bwButton" data-value="bw"><span class="icon">BN</span> B&N</button>
+              <button type="button" id="colorButton" data-value="color"><span class="icon">CL</span> Color</button>
+            </div>
+            <label class="field">
+              <span><span class="icon">DF</span> Faz</span>
+              <select id="duplexSelect">
+                <option value="simplex">Simple faz</option>
+                <option value="longEdge">Doble faz lado largo</option>
+                <option value="shortEdge">Doble faz lado corto</option>
+              </select>
+            </label>
+            <label class="field">
+              <span><span class="icon">#</span> Paginas</span>
+              <input id="rangeInput" type="text" placeholder="Todas o 1-3,5" />
+            </label>
+            <label class="field">
+              <span><span class="icon">%</span> Escala</span>
+              <select id="scaleSelect">
+                <option value="100">100%</option>
+                <option value="95">Ajustar un poco</option>
+                <option value="90">Reducir</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="card collapsible" id="cardPedido">
+          <button type="button" class="collapse-toggle">
+            <p class="label">Pedido</p>
+            <span class="collapse-arrow">▾</span>
+          </button>
+          <div class="collapse-body">
+            <dl id="orderList"></dl>
+          </div>
+        </section>
+
+        <section class="card collapsible collapsed" id="cardPerfil">
+          <button type="button" class="collapse-toggle">
+            <p class="label">Perfil detectado</p>
+            <span class="collapse-arrow">▾</span>
+          </button>
+          <div class="collapse-body">
+            <dl id="configList"></dl>
+          </div>
+        </section>
+
+        <p id="message" class="message" hidden></p>
+
+        <div class="actions">
+          <button id="printButton" class="button-primary" disabled>Aceptar / Imprimir</button>
+          <button id="systemPrintButton" class="button-secondary" disabled>Impresion del sistema</button>
+          <button id="closeButton" class="button-secondary">Cerrar</button>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>
