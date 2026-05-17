@@ -61,6 +61,7 @@ export default async function TerciarizadosPage({
                 <th className="text-left px-4 py-3 font-semibold text-zinc-600">Nro</th>
                 <th className="text-left px-4 py-3 font-semibold text-zinc-600">Cliente</th>
                 <th className="text-left px-4 py-3 font-semibold text-zinc-600">Item</th>
+                <th className="text-left px-4 py-3 font-semibold text-zinc-600">Proveedor</th>
                 <th className="text-left px-4 py-3 font-semibold text-zinc-600">Estado</th>
                 <th className="text-left px-4 py-3 font-semibold text-zinc-600">Sucursal</th>
                 <th className="text-right px-4 py-3 font-semibold text-zinc-600">Total</th>
@@ -84,6 +85,7 @@ export default async function TerciarizadosPage({
                     <p>{e.item}</p>
                     {e.anotacion && <p className="text-xs text-zinc-400 italic">{e.anotacion}</p>}
                   </td>
+                  <td className="px-4 py-3 text-zinc-500">{e.proveedor || "—"}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                       {e.estado}
