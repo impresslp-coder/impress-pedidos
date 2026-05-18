@@ -1,7 +1,9 @@
 :root {
   color-scheme: dark;
-  --primary: #1a1a2e;
-  --accent: #f5a623;
+  --primary: #07070a;
+  --accent: #fff200;
+  --magenta: #e6007e;
+  --cyan: #139ce8;
   --ink: #101018;
 }
 
@@ -17,18 +19,33 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #101018;
+  background: #07070a;
   color: white;
 }
 
 .top-tabs {
   display: flex;
   gap: 6px;
-  height: 50px;
+  height: 58px;
   align-items: center;
   padding: 0 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: #0e0e1c;
+  background:
+    linear-gradient(90deg, rgba(230, 0, 126, 0.16), rgba(19, 156, 232, 0.12), rgba(255, 242, 0, 0.10)),
+    #07070a;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  width: 104px;
+  margin-right: 8px;
+}
+
+.app-brand img {
+  width: 96px;
+  height: 48px;
+  object-fit: contain;
 }
 
 .top-tabs button {
@@ -54,13 +71,13 @@ body {
   color: var(--primary);
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(245, 166, 35, 0.25);
+  box-shadow: 0 0 12px rgba(255, 242, 0, 0.22);
 }
 
 .app-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 390px;
-  height: calc(100vh - 48px);
+  height: calc(100vh - 58px);
 }
 
 body[data-tab="cola"] .app-shell,
@@ -75,7 +92,10 @@ body[data-tab="historial"] .panel {
 
 .viewer {
   overflow: auto;
-  background: #2f3038;
+  background:
+    radial-gradient(circle at 0 0, rgba(19, 156, 232, 0.12), transparent 26rem),
+    radial-gradient(circle at 100% 0, rgba(230, 0, 126, 0.10), transparent 25rem),
+    #27272d;
   padding: 24px;
 }
 
@@ -111,7 +131,17 @@ body[data-tab="historial"] .panel {
   overflow-y: auto;
   padding: 22px;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
-  background: var(--primary);
+  background:
+    linear-gradient(180deg, rgba(255, 242, 0, 0.06), transparent 18rem),
+    var(--primary);
+}
+
+.panel-logo {
+  width: 132px;
+  height: 86px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 8px;
 }
 
 .eyebrow,
@@ -256,7 +286,7 @@ button:disabled {
 .button-primary {
   color: var(--primary);
   background: var(--accent);
-  box-shadow: 0 2px 8px rgba(245, 166, 35, 0.25);
+  box-shadow: 0 2px 8px rgba(255, 242, 0, 0.22);
 }
 
 .button-primary:not(:disabled):hover {
@@ -265,12 +295,12 @@ button:disabled {
 
 .button-secondary {
   color: #e5e7eb;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(19, 156, 232, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .button-secondary:not(:disabled):hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(19, 156, 232, 0.24);
 }
 
 .field {
@@ -393,15 +423,15 @@ button:disabled {
   border-radius: 8px;
   padding: 0 10px;
   color: white;
-  background: #202038;
+  background: #111827;
 }
 
 .auto-status {
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  color: #fde68a;
-  background: rgba(245, 166, 35, 0.12);
+  color: #fff200;
+  background: rgba(255, 242, 0, 0.10);
   font-size: 12px;
   font-weight: 700;
   transition: color 0.2s, background 0.2s;
@@ -427,7 +457,7 @@ button:disabled {
 
 .small-button.secondary {
   color: white;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(19, 156, 232, 0.18);
 }
 
 .tickets-list {
@@ -985,6 +1015,72 @@ button:disabled {
 }
 
 /* ── Historial ── */
+.operator-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 6, 15, 0.62);
+}
+
+.operator-modal[hidden] {
+  display: none;
+}
+
+.operator-dialog {
+  width: min(420px, 94vw);
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(245, 166, 35, 0.45);
+  border-radius: 8px;
+  padding: 20px;
+  background: #181820;
+  color: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.operator-dialog h2 {
+  margin: 4px 0 6px;
+}
+
+.operator-dialog p {
+  margin: 0;
+  color: #d4d4d8;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.operator-dialog input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #fff;
+  background: #202038;
+  font-size: 18px;
+  font-weight: 900;
+  outline: none;
+}
+
+.operator-dialog input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(245, 166, 35, 0.18);
+}
+
+.operator-error {
+  color: #fecaca !important;
+  font-weight: 800;
+}
+
+.operator-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .historial-view {
   max-width: 1100px;
   margin: 0 auto;

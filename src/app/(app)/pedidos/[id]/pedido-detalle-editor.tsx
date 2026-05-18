@@ -21,6 +21,21 @@ const dateTimeLocal = (value: string | null | undefined) => {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
 
+function mercadoPagoFallback(mensaje: string | null | undefined) {
+  const text = String(mensaje ?? "");
+  const match = text.match(/MP:\s*(\d+)\s*\|\s*Monto:\s*([0-9.,]+)\s*\|\s*Hora:\s*([^\n]+)/);
+  if (!match) return null;
+  return { id: match[1], monto: match[2], hora: match[3] };
+}
+
+function cleanPedidoMensaje(mensaje: string | null | undefined) {
+  return String(mensaje ?? "")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("MP:"))
+    .join("\n")
+    .trim();
+}
+
 export default function PedidoDetalleEditor({
   pedido,
   itemsIniciales,
@@ -42,6 +57,8 @@ export default function PedidoDetalleEditor({
     () => items.reduce((acc, item) => acc + (Number(item.precio) || 0), 0),
     [items],
   );
+  const mpFallback = mercadoPagoFallback(pedido.mensaje);
+  const mensajePedido = cleanPedidoMensaje(pedido.mensaje);
 
   const updateItem = (id: string, key: string, value: string) => {
     setItems((prev) => prev.map((item) => item.id === id ? { ...item, [key]: value } : item));
@@ -216,7 +233,7 @@ export default function PedidoDetalleEditor({
               </Field>
               <div className="md:col-span-2">
                 <Field label="Mensaje">
-                  <textarea name="mensaje" defaultValue={pedido.mensaje ?? ""}
+                  <textarea name="mensaje" defaultValue={mensajePedido}
                     className="input min-h-24" disabled={!editing} suppressHydrationWarning />
                 </Field>
               </div>
@@ -301,6 +318,15 @@ export default function PedidoDetalleEditor({
             <Info label="Total" value={fmt(total)} />
             <Info label="Resta" value={fmt(Math.max(0, total - (Number(pedido.senia) || 0)))} />
           </section>
+
+          {(pedido.mercado_pago_payment_id || pedido.mercado_pago_monto || pedido.mercado_pago_hora || mpFallback) && (
+            <section className="bg-white rounded-xl border border-emerald-200 shadow-sm p-5 space-y-3 text-sm">
+              <h2 className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Pago Mercado Pago</h2>
+              <Info label="Referencia" value={pedido.mercado_pago_payment_id ?? mpFallback?.id} />
+              <Info label="Monto" value={pedido.mercado_pago_monto ? fmt(Number(pedido.mercado_pago_monto)) : mpFallback?.monto ? fmt(Number(mpFallback.monto)) : null} />
+              <Info label="Hora" value={pedido.mercado_pago_hora ? new Date(pedido.mercado_pago_hora).toLocaleString("es-AR") : mpFallback?.hora ?? null} />
+            </section>
+          )}
 
           <section className="bg-white rounded-xl border border-zinc-200 shadow-sm p-5 space-y-3 text-sm">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Tickets</h2>

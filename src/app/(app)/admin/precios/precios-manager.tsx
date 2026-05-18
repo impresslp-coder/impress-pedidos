@@ -31,6 +31,23 @@ const CAT_LABELS: Record<string, string> = {
 };
 
 type Sucursal = { id: string; nombre: string; activo: boolean };
+type PresetImpresion = { nombre: string; hojas: number; papel: string; precioUnitario: number };
+
+function parsePresets(raw?: string): PresetImpresion[] {
+  if (!raw) return [{ nombre: "Documento", hojas: 1, papel: "Comun", precioUnitario: 0 }];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [{ nombre: "Documento", hojas: 1, papel: "Comun", precioUnitario: 0 }];
+    return parsed.map((item) => ({
+      nombre: String(item.nombre || "Documento"),
+      hojas: Math.max(1, Number(item.hojas) || 1),
+      papel: String(item.papel || "Comun"),
+      precioUnitario: Math.max(0, Number(item.precioUnitario) || 0),
+    }));
+  } catch {
+    return [{ nombre: "Documento", hojas: 1, papel: "Comun", precioUnitario: 0 }];
+  }
+}
 
 export default function PreciosManager({
   productos: inicial,
@@ -90,17 +107,37 @@ export default function PreciosManager({
   const [cfg, setCfg] = useState<Record<string, string>>(configInicial);
   const [savingCfg, setSavingCfg] = useState(false);
   const [savedCfg, setSavedCfg] = useState(false);
+  const [presetsImpresion, setPresetsImpresion] = useState<PresetImpresion[]>(() => parsePresets(configInicial.ventas_presets_impresion));
+  const [nuevoPreset, setNuevoPreset] = useState<PresetImpresion>({ nombre: "", hojas: 1, papel: "Comun", precioUnitario: 0 });
 
   const guardarConfig = async () => {
     setSavingCfg(true);
     await fetch("/api/admin/config", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cfg),
+      body: JSON.stringify({
+        ...cfg,
+        ventas_presets_impresion: JSON.stringify(presetsImpresion),
+      }),
     });
     setSavingCfg(false);
     setSavedCfg(true);
     setTimeout(() => setSavedCfg(false), 2000);
+  };
+
+  const updatePreset = (index: number, changes: Partial<PresetImpresion>) => {
+    setPresetsImpresion((prev) => prev.map((preset, idx) => idx === index ? { ...preset, ...changes } : preset));
+  };
+
+  const agregarPreset = () => {
+    if (!nuevoPreset.nombre.trim()) return;
+    setPresetsImpresion((prev) => [...prev, {
+      nombre: nuevoPreset.nombre.trim(),
+      hojas: Math.max(1, Number(nuevoPreset.hojas) || 1),
+      papel: nuevoPreset.papel.trim() || "Comun",
+      precioUnitario: Math.max(0, Number(nuevoPreset.precioUnitario) || 0),
+    }]);
+    setNuevoPreset({ nombre: "", hojas: 1, papel: "Comun", precioUnitario: 0 });
   };
 
   const fmt = (n: number | null) => n != null ? String(n) : "";
@@ -649,6 +686,68 @@ export default function PreciosManager({
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5a623]"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-100 pt-5">
+            <p className="text-sm font-semibold text-zinc-700 mb-3">Botones preconfigurados de Ventas</p>
+            <div className="space-y-2">
+              {presetsImpresion.map((preset, index) => (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_120px_160px_140px_auto] gap-2 items-end rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                    Nombre
+                    <input value={preset.nombre} onChange={(e) => updatePreset(index, { nombre: e.target.value })}
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                    Hojas
+                    <input type="number" min="1" value={preset.hojas} onChange={(e) => updatePreset(index, { hojas: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                    Papel
+                    <input value={preset.papel} onChange={(e) => updatePreset(index, { papel: e.target.value })}
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                    Precio c/hoja
+                    <input type="number" min="0" step="0.01" value={preset.precioUnitario} onChange={(e) => updatePreset(index, { precioUnitario: Math.max(0, parseFloat(e.target.value) || 0) })}
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                  </label>
+                  <button type="button" onClick={() => setPresetsImpresion((prev) => prev.filter((_, idx) => idx !== index))}
+                    className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100">
+                    Quitar
+                  </button>
+                </div>
+              ))}
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_160px_140px_auto] gap-2 items-end rounded-lg border border-dashed border-zinc-300 p-3">
+                <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                  Nombre
+                  <input value={nuevoPreset.nombre} onChange={(e) => setNuevoPreset((prev) => ({ ...prev, nombre: e.target.value }))}
+                    placeholder="Documento"
+                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                  Hojas
+                  <input type="number" min="1" value={nuevoPreset.hojas} onChange={(e) => setNuevoPreset((prev) => ({ ...prev, hojas: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                  Papel
+                  <input value={nuevoPreset.papel} onChange={(e) => setNuevoPreset((prev) => ({ ...prev, papel: e.target.value }))}
+                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-500">
+                  Precio c/hoja
+                  <input type="number" min="0" step="0.01" value={nuevoPreset.precioUnitario} onChange={(e) => setNuevoPreset((prev) => ({ ...prev, precioUnitario: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-800" />
+                </label>
+                <button type="button" onClick={agregarPreset}
+                  className="rounded-lg bg-[#1a1a2e] px-3 py-2 text-xs font-bold text-white hover:bg-zinc-800">
+                  + Agregar
+                </button>
+              </div>
+              <p className="text-xs text-zinc-400">Ejemplo: Documento, 1 hoja, Comun, precio unitario. Luego aparece como boton en Ventas.</p>
             </div>
           </div>
 

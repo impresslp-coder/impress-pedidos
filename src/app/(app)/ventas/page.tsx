@@ -61,19 +61,27 @@ export default async function VentasPage() {
       "ventas_extra_abrochado",
       "ventas_extra_anillado",
       "ventas_extra_encuadernado",
+      "ventas_presets_impresion",
     ]);
 
   const configVentas: Record<string, string> = {};
   for (const row of configRows ?? []) configVentas[row.clave] = row.valor;
 
+  const { data: sucursales } = await supabase
+    .from("sucursales")
+    .select("id, nombre")
+    .eq("activo", true)
+    .order("nombre");
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-800">Ventas</h1>
-        <p className="text-xs text-zinc-400 mt-0.5">Punto de venta</p>
-      </div>
-
-      <VentasForm productos={(productos as any[]) ?? []} topIds={topIds} stockMap={stockMap} config={configVentas} />
+      <VentasForm
+        productos={(productos as any[]) ?? []}
+        topIds={topIds}
+        stockMap={stockMap}
+        config={configVentas}
+        sucursales={(sucursales as any[]) ?? []}
+      />
 
       <div>
         <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">Ultimas ventas</h2>

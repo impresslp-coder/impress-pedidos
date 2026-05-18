@@ -1,15 +1,31 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-brand: #1a1a2e;       /* Azul noche */
-  --color-brand-dark: #16213e;
-  --color-brand-light: #0f3460;
-  --color-accent: #f5a623;      /* Amarillo imprenta */
-  --color-accent-dark: #d4881a;
+  --color-brand: #07070a;
+  --color-brand-dark: #000000;
+  --color-brand-light: #111827;
+  --color-accent: #fff200;
+  --color-accent-dark: #e0007a;
+  --color-process-cyan: #139ce8;
+  --color-process-magenta: #e6007e;
 }
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(19, 156, 232, 0.10), transparent 28rem),
+    radial-gradient(circle at top right, rgba(255, 242, 0, 0.12), transparent 24rem),
+    #f8fafc;
+}
+
+.brand-surface {
+  background:
+    linear-gradient(135deg, rgba(7, 7, 10, 0.98), rgba(26, 26, 46, 0.96)),
+    #07070a;
+}
+
+.brand-mark {
+  background: linear-gradient(90deg, #e6007e, #139ce8, #fff200);
 }
 
 @media print {

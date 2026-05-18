@@ -13,6 +13,11 @@ type Producto = {
   foto_url?: string | null;
 };
 
+type Sucursal = {
+  id: string;
+  nombre: string;
+};
+
 type CartItem = ItemVentaInput & {
   _key: number;
   descuento_max: number;
@@ -21,8 +26,8 @@ type CartItem = ItemVentaInput & {
 
 type PapelTramo = { desde: number; hasta: number; precio: number };
 type Papel = { nombre: string; tramos: PapelTramo[] };
+type PresetImpresion = { nombre: string; hojas: number; papel: string; precioUnitario: number };
 type Faz = "simple" | "doble";
-type Encuadernacion = "sin" | "anillado" | "encuadernado";
 type PagPorHoja = 1 | 2 | 4;
 
 const fmt = (n: number) =>
@@ -101,6 +106,26 @@ const precioPapelPorHojas = (papel: Papel | undefined, hojas: number) => {
   return tramo?.precio ?? 0;
 };
 
+const parsePresets = (raw: string | undefined, papeles: Papel[]): PresetImpresion[] => {
+  const fallbackPapel = papeles[0]?.nombre ?? "Comun";
+  const fallbackPrecio = precioPapelPorHojas(papeles[0], 1);
+  const fallback = [{ nombre: "Documento", hojas: 1, papel: fallbackPapel, precioUnitario: fallbackPrecio }];
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return fallback;
+    const presets = parsed.map((item) => ({
+      nombre: String(item.nombre || "Documento"),
+      hojas: Math.max(1, Number(item.hojas) || 1),
+      papel: String(item.papel || fallbackPapel),
+      precioUnitario: Math.max(0, Number(item.precioUnitario) || 0),
+    })).filter((item) => item.nombre);
+    return presets.length ? presets : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const calcularHojasArchivo = (paginas: number, pagPorHoja: PagPorHoja, faz: Faz) => {
   if (paginas === 2 && pagPorHoja === 1) return 1;
   const caras = Math.ceil(paginas / pagPorHoja);
@@ -108,12 +133,13 @@ const calcularHojasArchivo = (paginas: number, pagPorHoja: PagPorHoja, faz: Faz)
 };
 
 export default function VentasForm({
-  productos, topIds, stockMap, config,
+  productos, topIds, stockMap, config, sucursales,
 }: {
   productos: Producto[];
   topIds: string[];
   stockMap: Record<string, number>;
   config: Record<string, string>;
+  sucursales: Sucursal[];
 }) {
   const [codigo, setCodigo] = useState("");
   const [q, setQ] = useState("");
@@ -122,6 +148,7 @@ export default function VentasForm({
   const [nextKey, setNextKey] = useState(0);
   const [stockLocal, setStockLocal] = useState<Record<string, number>>(stockMap);
   const [medioPago, setMedioPago] = useState("efectivo");
+  const [sucursal, setSucursal] = useState(sucursales[0]?.nombre ?? "");
   const [codigoPersonal, setCodigoPersonal] = useState("");
   const [isPending, startTransition] = useTransition();
   const [ventaOk, setVentaOk] = useState<string | null>(null);
@@ -134,10 +161,12 @@ export default function VentasForm({
   const [faz, setFaz] = useState<Faz>("simple");
   const [pagPorHoja, setPagPorHoja] = useState<PagPorHoja>(1);
   const [copias, setCopias] = useState(1);
-  const [encuadernacion, setEncuadernacion] = useState<Encuadernacion>("sin");
-  const [abrochado, setAbrochado] = useState(false);
   const [pdfs, setPdfs] = useState<{ name: string; paginas: number }[]>([]);
   const [contando, setContando] = useState(false);
+  const presetsImpresion = parsePresets(config.ventas_presets_impresion, papeles);
+  const [manualHojas, setManualHojas] = useState(1);
+  const [manualPapel, setManualPapel] = useState(papeles[0]?.nombre ?? "Comun");
+  const [manualPrecioUnitario, setManualPrecioUnitario] = useState(() => precioPapelPorHojas(papeles[0], 1));
 
   useEffect(() => { codigoRef.current?.focus(); }, []);
 
@@ -214,13 +243,34 @@ export default function VentasForm({
   );
   const hojas = hojasPorCopia * copias;
   const papelSel = papeles.find((p) => p.nombre === papel) ?? papeles[0];
-  const extraEncuadernacion =
-    encuadernacion === "anillado" ? parseFloat(config.ventas_extra_anillado ?? "0") || 0
-    : encuadernacion === "encuadernado" ? parseFloat(config.ventas_extra_encuadernado ?? "0") || 0
-    : 0;
-  const extraAbrochado = abrochado ? parseFloat(config.ventas_extra_abrochado ?? "0") || 0 : 0;
   const precioHoja = precioPapelPorHojas(papelSel, hojas);
-  const totalImpresion = Math.round((hojas * precioHoja) + extraEncuadernacion + extraAbrochado);
+  const totalImpresion = Math.round(hojas * precioHoja);
+  const totalManual = Math.round(manualHojas * manualPrecioUnitario);
+
+  const aplicarPreset = (preset: PresetImpresion) => {
+    setManualHojas(preset.hojas);
+    setManualPapel(preset.papel);
+    setManualPrecioUnitario(preset.precioUnitario);
+  };
+
+  const agregarManual = () => {
+    if (manualHojas <= 0 || totalManual <= 0) return;
+    setItems((prev) => [
+      ...prev,
+      {
+        _key: nextKey,
+        producto_id: null,
+        producto_nombre: `Documento (${manualHojas} hojas - ${manualPapel})`,
+        precio_venta: totalManual,
+        cantidad: 1,
+        descuento_pct: 0,
+        descuento_max: 0,
+        stockeable: false,
+      },
+    ]);
+    setNextKey((k) => k + 1);
+    codigoRef.current?.focus();
+  };
 
   const handlePDFs = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -244,8 +294,6 @@ export default function VentasForm({
       faz === "doble" ? "doble faz" : "simple faz",
       `${pagPorHoja} p/hoja`,
       papel,
-      encuadernacion !== "sin" ? encuadernacion : null,
-      abrochado ? "abrochado" : null,
     ].filter(Boolean).join(" - ");
     setItems((prev) => [
       ...prev,
@@ -273,6 +321,7 @@ export default function VentasForm({
     setError(undefined);
     const fd = new FormData();
     fd.set("medio_pago", medioPago);
+    fd.set("sucursal", sucursal);
     fd.set("codigo_personal", codigoPersonal);
     fd.set("items", JSON.stringify(items.map(({ _key, descuento_max, stockeable, ...rest }) => rest)));
     startTransition(() => {
@@ -313,9 +362,13 @@ export default function VentasForm({
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
-      <div className="xl:col-span-3 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_190px] gap-2">
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(180px,240px)_1fr] gap-4 items-end">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-800">Ventas</h1>
+          <p className="text-xs text-zinc-400 mt-0.5">Punto de venta</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_210px_180px] gap-2">
           <input
             ref={codigoRef}
             value={codigo}
@@ -337,8 +390,19 @@ export default function VentasForm({
             <option value="">Todas las categorias</option>
             {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          <select value={sucursal} onChange={(e) => setSucursal(e.target.value)}
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623]">
+            {sucursales.length === 0 ? (
+              <option value="">Sin sucursal</option>
+            ) : (
+              sucursales.map((s) => <option key={s.id} value={s.nombre}>{s.nombre}</option>)
+            )}
+          </select>
         </div>
+      </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+      <div className="xl:col-span-3 space-y-4">
         <div className="bg-white rounded-md border border-zinc-200 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold text-zinc-800">Contador de PDFs</h2>
@@ -348,41 +412,41 @@ export default function VentasForm({
             </button>
             <input ref={pdfRef} type="file" accept="application/pdf" multiple className="hidden" onChange={handlePDFs} />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-            <select value={faz} onChange={(e) => setFaz(e.target.value as Faz)}
-              className="rounded-md border border-zinc-300 px-2 py-2 text-sm">
-              <option value="simple">Simple faz</option>
-              <option value="doble">Doble faz</option>
-            </select>
-            <select value={pagPorHoja} onChange={(e) => setPagPorHoja(parseInt(e.target.value) as PagPorHoja)}
-              className="rounded-md border border-zinc-300 px-2 py-2 text-sm">
-              <option value="1">1 pag/hoja</option>
-              <option value="2">2 pag/hoja</option>
-              <option value="4">4 pag/hoja</option>
-            </select>
-            <select value={papel} onChange={(e) => setPapel(e.target.value)}
-              className="rounded-md border border-zinc-300 px-2 py-2 text-sm">
-              {papeles.map((p) => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
-            </select>
-            <input
-              type="number"
-              min="1"
-              value={copias}
-              onChange={(e) => setCopias(Math.max(1, parseInt(e.target.value) || 1))}
-              suppressHydrationWarning
-              className="rounded-md border border-zinc-300 px-2 py-2 text-sm"
-              aria-label="Cantidad de copias"
-              title="Cantidad de copias"
-            />
-            <select value={encuadernacion} onChange={(e) => setEncuadernacion(e.target.value as Encuadernacion)}
-              className="rounded-md border border-zinc-300 px-2 py-2 text-sm">
-              <option value="sin">Sin encuadernacion</option>
-              <option value="anillado">Anillado</option>
-              <option value="encuadernado">Encuadernado</option>
-            </select>
-            <label className="flex items-center gap-2 rounded-md border border-zinc-300 px-2 py-2 text-sm">
-              <input type="checkbox" checked={abrochado} onChange={(e) => setAbrochado(e.target.checked)} />
-              Abrochado
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Faz
+              <select value={faz} onChange={(e) => setFaz(e.target.value as Faz)}
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900">
+                <option value="simple">Simple faz</option>
+                <option value="doble">Doble faz</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Pag/hoja
+              <select value={pagPorHoja} onChange={(e) => setPagPorHoja(parseInt(e.target.value) as PagPorHoja)}
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900">
+                <option value="1">1 pag/hoja</option>
+                <option value="2">2 pag/hoja</option>
+                <option value="4">4 pag/hoja</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Tipo papel
+              <select value={papel} onChange={(e) => setPapel(e.target.value)}
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900">
+                {papeles.map((p) => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Copias
+              <input
+                type="number"
+                min="1"
+                value={copias}
+                onChange={(e) => setCopias(Math.max(1, parseInt(e.target.value) || 1))}
+                suppressHydrationWarning
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900"
+              />
             </label>
           </div>
           {pdfs.length > 0 && (
@@ -413,6 +477,59 @@ export default function VentasForm({
             </div>
           )}
           {contando && <p className="text-xs text-zinc-400">Contando paginas...</p>}
+        </div>
+
+        <div className="bg-white rounded-md border border-zinc-200 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-800">Carga rapida de hojas</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">Precio editable en vivo, sin abrir otra ventana.</p>
+            </div>
+            <button type="button" onClick={agregarManual}
+              className="px-3 py-2 rounded-md bg-[#1a1a2e] text-white text-xs font-bold hover:bg-zinc-800">
+              Agregar
+            </button>
+          </div>
+          {presetsImpresion.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {presetsImpresion.map((preset) => (
+                <button key={`${preset.nombre}-${preset.hojas}-${preset.papel}`} type="button" onClick={() => aplicarPreset(preset)}
+                  className="px-3 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-[#1a1a2e] text-xs font-black hover:bg-amber-100">
+                  {preset.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Canti de hojas
+              <input type="number" min="1" value={manualHojas}
+                onChange={(e) => setManualHojas(Math.max(1, parseInt(e.target.value) || 1))}
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900" />
+            </label>
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Tipo de papel
+              <select value={manualPapel}
+                onChange={(e) => {
+                  const nextPaper = e.target.value;
+                  setManualPapel(nextPaper);
+                  setManualPrecioUnitario(precioPapelPorHojas(papeles.find((p) => p.nombre === nextPaper), manualHojas));
+                }}
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900">
+                {papeles.map((p) => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              Precio c/hoja
+              <input type="number" min="0" step="0.01" value={manualPrecioUnitario}
+                onChange={(e) => setManualPrecioUnitario(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900" />
+            </label>
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">Precio</p>
+              <p className="text-lg font-black text-[#f5a623]">{fmt(totalManual)}</p>
+            </div>
+          </div>
         </div>
 
         {filtrados.length === 0 ? (
@@ -572,6 +689,7 @@ export default function VentasForm({
             {isPending ? "Registrando..." : "Confirmar venta"}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

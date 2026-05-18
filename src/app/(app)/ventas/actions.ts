@@ -35,6 +35,7 @@ export async function registrarVenta(formData: FormData) {
   }
 
   const medioPago = (formData.get("medio_pago") as string) || "efectivo";
+  const sucursal = ((formData.get("sucursal") as string) || "").trim();
   const itemsJson = formData.get("items") as string;
   if (!itemsJson) return { error: "Sin productos" };
 
@@ -59,6 +60,7 @@ export async function registrarVenta(formData: FormData) {
       usuario_id: user.id,
       total,
       medio_pago: medioPago,
+      sucursal: sucursal || null,
     } as any)
     .select("id")
     .single();

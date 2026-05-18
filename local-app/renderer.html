@@ -8,6 +8,9 @@
   </head>
   <body>
     <nav class="top-tabs" aria-label="Secciones">
+      <div class="app-brand">
+        <img src="./assets/impress-logo.png" alt="IMPRESS" />
+      </div>
       <button type="button" id="pdfTab" class="active">[PDF] PDF</button>
       <button type="button" id="ticketsTab">[#] Tickets</button>
       <button type="button" id="colaTab">[ðŸ–¨] Cola</button>
@@ -27,6 +30,11 @@
               <h2>Tickets del dÃ­a</h2>
             </div>
             <div class="ticket-tools">
+              <label>
+                <span>Impresora tickets</span>
+                <select id="ticketPrinterSelect"></select>
+              </label>
+              <button type="button" id="toggleTicketAutoButton" class="small-button secondary">Auto tickets: OFF</button>
               <button type="button" id="refreshTicketsButton" class="small-button">Actualizar</button>
             </div>
           </div>
@@ -86,6 +94,7 @@
 
       <aside class="panel">
         <header>
+          <img class="panel-logo" src="./assets/impress-logo.png" alt="IMPRESS" />
           <p class="eyebrow">IMPRESS Print</p>
           <h1>Trabajo actual</h1>
         </header>
@@ -139,6 +148,22 @@
         </div>
       </aside>
     </main>
+
+    <div id="operatorModal" class="operator-modal" hidden>
+      <form id="operatorForm" class="operator-dialog">
+        <div>
+          <p class="eyebrow">Autorizacion</p>
+          <h2>Codigo de usuario</h2>
+          <p>Ingrese el codigo del operador para ejecutar la cola de impresion.</p>
+        </div>
+        <input id="operatorCodeInput" type="password" autocomplete="off" inputmode="numeric" placeholder="Codigo" />
+        <p id="operatorModalError" class="operator-error" hidden></p>
+        <div class="operator-actions">
+          <button type="button" id="operatorCancelButton" class="button-secondary">Cancelar</button>
+          <button type="submit" class="button-primary">Autorizar</button>
+        </div>
+      </form>
+    </div>
 
     <div id="errorModal" class="error-modal" hidden>
       <div class="error-dialog" role="dialog" aria-modal="true" aria-labelledby="errorModalTitle">

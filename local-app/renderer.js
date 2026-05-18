@@ -17,6 +17,8 @@ const ticketsListEl = document.getElementById("ticketsList");
 const colaViewEl = document.getElementById("colaView");
 const colaContentEl = document.getElementById("colaContent");
 const refreshTicketsButton = document.getElementById("refreshTicketsButton");
+const ticketPrinterSelect = document.getElementById("ticketPrinterSelect");
+const toggleTicketAutoButton = document.getElementById("toggleTicketAutoButton");
 const ticketAutoStatus = document.getElementById("ticketAutoStatus");
 const pdfTab = document.getElementById("pdfTab");
 const ticketsTab = document.getElementById("ticketsTab");
@@ -38,10 +40,17 @@ const errorModalDetails = document.getElementById("errorModalDetails");
 const errorModalCopy = document.getElementById("errorModalCopy");
 const errorModalClose = document.getElementById("errorModalClose");
 const errorModalCloseIcon = document.getElementById("errorModalCloseIcon");
+const operatorModal = document.getElementById("operatorModal");
+const operatorForm = document.getElementById("operatorForm");
+const operatorCodeInput = document.getElementById("operatorCodeInput");
+const operatorModalError = document.getElementById("operatorModalError");
+const operatorCancelButton = document.getElementById("operatorCancelButton");
 
 const PRINTED_TICKETS_KEY = "impress.printedTickets.v1";
 const FILE_HISTORY_KEY = "impress.fileHistory.v1";
 const PRINT_HISTORY_KEY = "impress.printHistory.v1";
+const TICKET_AUTO_KEY = "impress.ticketAutoPrint.v1";
+const TICKET_PRINTER_KEY = "impress.ticketPrinter.v1";
 
 let printJob;
 let previewTicket = null;
@@ -50,6 +59,7 @@ let currentPrintedUrl = "";
 let ticketsLoaded = false;
 let latestTickets = [];
 let colaExecuting = false;
+let autoTicketBusy = false;
 let availablePrinters = [];
 let currentPdfOptions = null;
 let currentPdfPageCount = 0;
@@ -248,10 +258,31 @@ function renderHistorial() {
 
 async function loadPrinters() {
   availablePrinters = await window.impressPrint.getPrinters();
+  renderTicketPrinterSettings();
 }
 
 function defaultPrinterName() {
   return availablePrinters.find((printer) => printer.isDefault)?.name || availablePrinters[0]?.name || "";
+}
+
+function selectedTicketPrinterName() {
+  const saved = localStorage.getItem(TICKET_PRINTER_KEY);
+  if (saved && availablePrinters.some((printer) => printer.name === saved)) return saved;
+  return defaultPrinterName();
+}
+
+function ticketAutoEnabled() {
+  return localStorage.getItem(TICKET_AUTO_KEY) === "true";
+}
+
+function renderTicketPrinterSettings() {
+  if (!ticketPrinterSelect || !toggleTicketAutoButton) return;
+  const selected = selectedTicketPrinterName();
+  ticketPrinterSelect.innerHTML = printerOptionsHtml(selected);
+  if (selected && ticketPrinterSelect.value !== selected) ticketPrinterSelect.value = selected;
+  toggleTicketAutoButton.textContent = ticketAutoEnabled() ? "Auto tickets: ON" : "Auto tickets: OFF";
+  toggleTicketAutoButton.classList.toggle("secondary", !ticketAutoEnabled());
+  updateAutoStatusText();
 }
 
 function printerByName(name) {
@@ -329,7 +360,7 @@ function defaultPdfOptions(archivo = {}) {
 }
 
 function defaultTicketOptions() {
-  const deviceName = defaultPrinterName();
+  const deviceName = selectedTicketPrinterName();
   return applyPaperToOptions({
     deviceName,
     copies: 1,
@@ -361,6 +392,41 @@ function parsePageRanges(value) {
 
   if (ranges.some((range) => !range)) return undefined;
   return ranges;
+}
+
+function pageNumbersFromText(value, totalPages) {
+  const total = Math.max(0, Number(totalPages) || 0);
+  if (!total) return [];
+  const ranges = parsePageRanges(value);
+  const pages = [];
+  const sourceRanges = ranges?.length ? ranges : [{ from: 0, to: total - 1 }];
+  for (const range of sourceRanges) {
+    const from = Math.max(0, Math.min(total - 1, Number(range.from) || 0));
+    const to = Math.max(from, Math.min(total - 1, Number(range.to) || from));
+    for (let page = from + 1; page <= to + 1; page += 1) pages.push(page);
+  }
+  return Array.from(new Set(pages));
+}
+
+function pagesToRangeText(pages, totalPages) {
+  const sorted = Array.from(new Set(pages)).sort((a, b) => a - b);
+  if (!sorted.length) return "Todas";
+  if (sorted.length === totalPages && sorted[0] === 1 && sorted[sorted.length - 1] === totalPages) return "Todas";
+
+  const parts = [];
+  let start = sorted[0];
+  let prev = sorted[0];
+  for (let index = 1; index <= sorted.length; index += 1) {
+    const current = sorted[index];
+    if (current === prev + 1) {
+      prev = current;
+      continue;
+    }
+    parts.push(start === prev ? String(start) : `${start}-${prev}`);
+    start = current;
+    prev = current;
+  }
+  return parts.join(",");
 }
 
 function printerOptionsHtml(selectedName) {
@@ -520,6 +586,111 @@ function printOptionsForRun(options) {
   };
 }
 
+function countPagesFromOptions(options, fallbackPages = 1) {
+  const ranges = parsePageRanges(options.pageRangesText);
+  if (!ranges?.length) return Math.max(1, Number(fallbackPages) || 1);
+  return ranges.reduce((total, range) => total + Math.max(0, Number(range.to) - Number(range.from) + 1), 0);
+}
+
+function estimateSheets(pages, options) {
+  const copies = Math.max(1, Number(options.copies) || 1);
+  const pageCount = Math.max(1, Number(pages) || 1);
+  const perCopy = options.duplexMode && options.duplexMode !== "simplex"
+    ? Math.ceil(pageCount / 2)
+    : pageCount;
+  return perCopy * copies;
+}
+
+function printEventAuthPayload() {
+  return {
+    token: job || null,
+    key: queueKey || null,
+  };
+}
+
+async function recordPrintEvent(payload) {
+  if (!base) return;
+  const res = await fetch(`${base}/api/print-events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...printEventAuthPayload(),
+      ...payload,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `No pude registrar la estadistica de impresion (${res.status})`);
+  }
+}
+
+async function safeRecordPrintEvent(label, payload) {
+  try {
+    await recordPrintEvent(payload);
+  } catch (error) {
+    showErrorModal(`No pude registrar estadistica de "${label}"`, error, { printEvent: payload });
+    setMessage(`Se imprimio "${label}", pero no pude guardar la estadistica.`, "error");
+  }
+}
+
+async function markPdfPrinted(job, payload) {
+  if (!job.printedUrl) return;
+  const res = await fetch(job.printedUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `No pude marcar impreso (${res.status})`);
+  }
+}
+
+function requestOperatorCode() {
+  if (!operatorModal || !operatorForm || !operatorCodeInput || !operatorCancelButton) return Promise.resolve("");
+  operatorModal.hidden = false;
+  operatorCodeInput.value = "";
+  operatorModalError.hidden = true;
+  setTimeout(() => operatorCodeInput.focus(), 0);
+
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      operatorForm.removeEventListener("submit", onSubmit);
+      operatorCancelButton.removeEventListener("click", onCancel);
+      operatorModal.hidden = true;
+    };
+    const onSubmit = (event) => {
+      event.preventDefault();
+      const code = operatorCodeInput.value.trim();
+      if (!code) {
+        operatorModalError.textContent = "Ingrese el codigo.";
+        operatorModalError.hidden = false;
+        return;
+      }
+      cleanup();
+      resolve(code);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve("");
+    };
+    operatorForm.addEventListener("submit", onSubmit);
+    operatorCancelButton.addEventListener("click", onCancel);
+  });
+}
+
+async function verifyOperatorCode(code) {
+  if (!base || !queueKey) throw new Error("No hay conexion configurada para validar el operador.");
+  const res = await fetch(`${base}/api/print-operator`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: queueKey, code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Codigo de usuario incorrecto");
+  return data.operator;
+}
+
 function updateQueuedOption(kind, id, field, value) {
   const target = kind === "pdf"
     ? pdfQueue.find((job) => job.id === id)?.options
@@ -625,16 +796,17 @@ function cloneOptions(options) {
   return JSON.parse(JSON.stringify(options || {}));
 }
 
-function batchRanges(totalPages, batches) {
+function batchRanges(totalPages, batches, pageRangesText = "Todas") {
   const count = Math.max(1, Number(batches) || 1);
-  if (!totalPages || count === 1) return [null];
+  const pages = pageNumbersFromText(pageRangesText, totalPages);
+  if (!pages.length) return [];
+  if (count === 1) return [{ text: pagesToRangeText(pages, totalPages), pages }];
 
-  const size = Math.ceil(totalPages / count);
+  const size = Math.ceil(pages.length / count);
   const ranges = [];
   for (let index = 0; index < count; index += 1) {
-    const from = index * size + 1;
-    const to = Math.min(totalPages, (index + 1) * size);
-    if (from <= totalPages) ranges.push({ from, to });
+    const chunk = pages.slice(index * size, (index + 1) * size);
+    if (chunk.length) ranges.push({ text: pagesToRangeText(chunk, totalPages), pages: chunk });
   }
   return ranges;
 }
@@ -644,13 +816,13 @@ function enqueueCurrentPdfJob({ message = true } = {}) {
 
   const name = fileNameEl.textContent || "Documento";
   const baseOptions = cloneOptions(currentPdfOptions || defaultPdfOptions(printJob.archivo));
-  const ranges = batchRanges(currentPdfPageCount, baseOptions.batches);
+  const ranges = batchRanges(currentPdfPageCount, baseOptions.batches, baseOptions.pageRangesText);
   let added = 0;
 
   ranges.forEach((range, index) => {
     const options = cloneOptions(baseOptions);
-    if (range) options.pageRangesText = `${range.from}-${range.to}`;
-    const label = range ? `${name} - Tanda ${index + 1}/${ranges.length} (${range.from}-${range.to})` : name;
+    options.pageRangesText = range.text;
+    const label = ranges.length > 1 ? `${name} - Tanda ${index + 1}/${ranges.length} (${range.text})` : name;
     const queueKey = `${currentPdfQueueKey()}::${options.pageRangesText || "Todas"}`;
     if (queueKey && pdfQueue.some((job) => job.queueKey === queueKey)) return;
 
@@ -661,6 +833,9 @@ function enqueueCurrentPdfJob({ message = true } = {}) {
       pdfUrl: printJob.pdfUrl,
       options,
       printedUrl: currentPrintedUrl || "",
+      pedidoId: printJob.pedido?.id || "",
+      archivoId: printJob.archivo?.id || "",
+      pagesEstimated: range.pages.length,
       selected: true,
     });
     added += 1;
@@ -873,15 +1048,35 @@ function queueGroupHtml(title, kind, count, itemsHtml) {
 
 async function executePrinterQueue(kind = "all") {
   if (colaExecuting) return;
+  const ticketJobs = latestTickets.filter((ticket) => (
+    ticketQueue.has(ticket.ticketKey) && queuedSelection.get(ticket.ticketKey) !== false
+  ));
+  const jobs = [
+    ...pdfQueue.filter((job) => job.selected !== false).map((job) => ({ kind: "pdf", ...job })),
+    ...ticketJobs.map((ticket) => ({ kind: "ticket", ticket })),
+  ].filter((job) => kind === "all" || job.kind === kind);
+
+  if (!jobs.length) {
+    ticketAutoStatus.textContent = "Cola vacia.";
+    return;
+  }
+
+  const code = await requestOperatorCode();
+  if (!code) {
+    setMessage("Impresion cancelada: falta codigo de usuario.", "error");
+    return;
+  }
+
+  try {
+    const operator = await verifyOperatorCode(code);
+    setMessage(`Cola autorizada por ${operator?.nombre || "operador"}.`);
+  } catch (error) {
+    reportError("Codigo de usuario incorrecto", error);
+    return;
+  }
+
   colaExecuting = true;
   try {
-    const ticketJobs = latestTickets.filter((ticket) => (
-      ticketQueue.has(ticket.ticketKey) && queuedSelection.get(ticket.ticketKey) !== false
-    ));
-    const jobs = [
-      ...pdfQueue.filter((job) => job.selected !== false).map((job) => ({ kind: "pdf", ...job })),
-      ...ticketJobs.map((ticket) => ({ kind: "ticket", ticket })),
-    ].filter((job) => kind === "all" || job.kind === kind);
     let processed = 0;
 
     for (const job of jobs) {
@@ -890,15 +1085,64 @@ async function executePrinterQueue(kind = "all") {
       try {
         if (job.kind === "pdf") {
           const runOpts = printOptionsForRun(job.options);
+          const startedAt = new Date();
           await window.impressPrint.printPdfUrl(job.pdfUrl, runOpts);
+          const completedAt = new Date();
+          const pagesPrinted = countPagesFromOptions(job.options, job.pagesEstimated || currentPdfPageCount || 1);
+          const printStats = {
+            sourceType: "pdf",
+            pedidoId: job.pedidoId,
+            archivoId: job.archivoId,
+            jobName: job.name,
+            printerName: runOpts.deviceName,
+            copies: runOpts.copies,
+            pagesPrinted,
+            sheetsEstimated: estimateSheets(pagesPrinted, runOpts),
+            paperName: job.options.paperName,
+            duplexMode: runOpts.duplexMode,
+            color: runOpts.color,
+            pageRangesText: job.options.pageRangesText || "Todas",
+            startedAt: startedAt.toISOString(),
+            completedAt: completedAt.toISOString(),
+            durationMs: completedAt.getTime() - startedAt.getTime(),
+            metadata: {
+              queueKind: "pdf",
+              scaleFactor: runOpts.scaleFactor,
+            },
+          };
+          await markPdfPrinted(job, printStats);
           recordPrintHistory(job.name, runOpts.deviceName, runOpts.copies, "pdf");
-          if (job.printedUrl) await fetch(job.printedUrl, { method: "POST" }).catch(() => {});
           const idx = pdfQueue.findIndex((item) => item.id === job.id);
           if (idx >= 0) pdfQueue.splice(idx, 1);
         } else {
           const ticketOpts = getTicketOptions(job.ticket.ticketKey);
           const runOpts = printOptionsForRun(ticketOpts);
+          const startedAt = new Date();
           await window.impressPrint.printPdfUrl(job.ticket.pdfUrl, runOpts);
+          const completedAt = new Date();
+          await safeRecordPrintEvent(`${job.ticket.tipoLabel} #${job.ticket.numero}`, {
+            sourceType: "ticket",
+            ticketType: job.ticket.tipo === "entrega" ? "entrega" : "pedido",
+            pedidoId: job.ticket.id,
+            jobName: `${job.ticket.tipoLabel} #${job.ticket.numero}`,
+            printerName: runOpts.deviceName,
+            copies: runOpts.copies,
+            pagesPrinted: 0,
+            sheetsEstimated: 0,
+            paperName: ticketOpts.paperName,
+            duplexMode: runOpts.duplexMode,
+            color: runOpts.color,
+            pageRangesText: ticketOpts.pageRangesText || "Todas",
+            startedAt: startedAt.toISOString(),
+            completedAt: completedAt.toISOString(),
+            durationMs: completedAt.getTime() - startedAt.getTime(),
+            metadata: {
+              queueKind: "ticket",
+              ticketKey: job.ticket.ticketKey,
+              ticketTypeRaw: job.ticket.tipo,
+              ticketPrints: runOpts.copies,
+            },
+          });
           recordPrintHistory(`${job.ticket.tipoLabel} #${job.ticket.numero}`, runOpts.deviceName, runOpts.copies, "ticket");
           markTicketPrinted(job.ticket.ticketKey);
           ticketQueue.delete(job.ticket.ticketKey);
@@ -994,6 +1238,69 @@ async function loadTickets() {
   }
   renderTickets(latestTickets);
   renderCola();
+  await autoPrintTicketsIfEnabled(nuevos.length ? nuevos : latestTickets);
+}
+
+async function printTicketDirect(ticket) {
+  const ticketOpts = cloneOptions(defaultTicketOptions());
+  ticketPrintOptions.set(ticket.ticketKey, ticketOpts);
+  const runOpts = printOptionsForRun(ticketOpts);
+  const startedAt = new Date();
+  await window.impressPrint.printPdfUrl(ticket.pdfUrl, runOpts);
+  const completedAt = new Date();
+  await safeRecordPrintEvent(`${ticket.tipoLabel} #${ticket.numero}`, {
+    sourceType: "ticket",
+    ticketType: ticket.tipo === "entrega" ? "entrega" : "pedido",
+    pedidoId: ticket.id,
+    jobName: `${ticket.tipoLabel} #${ticket.numero}`,
+    printerName: runOpts.deviceName,
+    copies: runOpts.copies,
+    pagesPrinted: 0,
+    sheetsEstimated: 0,
+    paperName: ticketOpts.paperName,
+    duplexMode: runOpts.duplexMode,
+    color: runOpts.color,
+    pageRangesText: "Ticket",
+    startedAt: startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+    durationMs: completedAt.getTime() - startedAt.getTime(),
+    metadata: {
+      queueKind: "ticket-auto",
+      ticketKey: ticket.ticketKey,
+      ticketTypeRaw: ticket.tipo,
+      ticketPrints: runOpts.copies,
+    },
+  });
+  recordPrintHistory(`${ticket.tipoLabel} #${ticket.numero}`, runOpts.deviceName, runOpts.copies, "ticket");
+  markTicketPrinted(ticket.ticketKey);
+}
+
+async function autoPrintTicketsIfEnabled(candidates) {
+  if (!ticketAutoEnabled() || autoTicketBusy) {
+    updateAutoStatusText();
+    return;
+  }
+  const printed = printedTickets();
+  const pending = candidates.filter((ticket) => !printed.has(ticket.ticketKey));
+  if (!pending.length) {
+    updateAutoStatusText();
+    return;
+  }
+
+  autoTicketBusy = true;
+  try {
+    for (const ticket of pending) {
+      ticketAutoStatus.textContent = `Autoimprimiendo ${ticket.tipoLabel.toLowerCase()} #${ticket.numero}...`;
+      await printTicketDirect(ticket);
+    }
+    setMessage(`${pending.length} ticket(s) autoimpresos.`);
+  } catch (error) {
+    reportError("Error autoimprimiendo tickets", error);
+  } finally {
+    autoTicketBusy = false;
+    renderTickets(latestTickets);
+    updateAutoStatusText();
+  }
 }
 
 async function openTicket(ticket) {
@@ -1047,7 +1354,9 @@ async function printSelectedTickets() {
 
 function updateAutoStatusText() {
   ticketAutoStatus.dataset.paused = "false";
-  ticketAutoStatus.textContent = "Los tickets se imprimen solo desde la cola.";
+  ticketAutoStatus.textContent = ticketAutoEnabled()
+    ? `Auto tickets activo en ${selectedTicketPrinterName() || "impresora predeterminada"}.`
+    : "Los tickets se imprimen solo desde la cola.";
 }
 
 async function loadJob() {
@@ -1167,6 +1476,7 @@ async function loadNewJob(newJob, newBase, newKey) {
         latestTickets = [...nuevos, ...latestTickets];
         renderTickets(latestTickets);
         renderCola();
+        await autoPrintTicketsIfEnabled(nuevos);
       }
     }
 
@@ -1202,6 +1512,18 @@ pdfTab.addEventListener("click", () => setTab("pdf"));
 ticketsTab.addEventListener("click", () => setTab("tickets"));
 colaTab.addEventListener("click", () => setTab("cola"));
 if (historialTab) historialTab.addEventListener("click", () => setTab("historial"));
+ticketPrinterSelect?.addEventListener("change", () => {
+  localStorage.setItem(TICKET_PRINTER_KEY, ticketPrinterSelect.value);
+  ticketPrintOptions.clear();
+  renderTicketPrinterSettings();
+});
+toggleTicketAutoButton?.addEventListener("click", () => {
+  localStorage.setItem(TICKET_AUTO_KEY, ticketAutoEnabled() ? "false" : "true");
+  renderTicketPrinterSettings();
+  if (ticketAutoEnabled()) {
+    autoPrintTicketsIfEnabled(latestTickets).catch((error) => reportError("Error autoimprimiendo tickets", error));
+  }
+});
 
 document.getElementById("clearHistorialButton")?.addEventListener("click", () => {
   localStorage.removeItem(FILE_HISTORY_KEY);

@@ -14,7 +14,7 @@ function SubmitButton() {
       type="submit"
       disabled={pending}
       suppressHydrationWarning
-      className="w-full rounded-md bg-[#1a1a2e] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-[#16213e] disabled:opacity-60"
+      className="w-full rounded-md bg-black px-3 py-2.5 text-sm font-black text-[#fff200] transition hover:bg-zinc-900 disabled:opacity-60"
     >
       {pending ? "Ingresando..." : "Ingresar"}
     </button>
@@ -47,7 +47,7 @@ export default function LoginForm() {
           required
           autoComplete="email"
           suppressHydrationWarning
-          className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-[#f5a623] focus:outline-none focus:ring-1 focus:ring-[#f5a623]"
+          className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-[#139ce8] focus:outline-none focus:ring-1 focus:ring-[#139ce8]"
           placeholder="usuario@impress.com"
         />
       </div>
@@ -60,7 +60,7 @@ export default function LoginForm() {
           required
           autoComplete="current-password"
           suppressHydrationWarning
-          className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-[#f5a623] focus:outline-none focus:ring-1 focus:ring-[#f5a623]"
+          className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-[#e6007e] focus:outline-none focus:ring-1 focus:ring-[#e6007e]"
         />
       </div>
 
