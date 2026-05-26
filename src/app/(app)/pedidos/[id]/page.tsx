@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import PedidoDetalleEditor from "./pedido-detalle-editor";
+import ReclamosPanel from "./reclamos-panel";
+import PresupuestoBanner from "./presupuesto-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -147,11 +149,18 @@ export default async function DetallePedidoPage({
   const items = ((pedido as any).items_pedido as any[]) ?? [];
   const archivos = ((pedido as any).archivos_pedido as any[]) ?? [];
   const usuario = (pedido as any).usuarios_sistema as any;
-  const { data: printEvents, error: printEventsError } = await admin
-    .from("pedido_print_events")
-    .select("*")
-    .eq("pedido_id", id)
-    .order("completed_at", { ascending: false });
+  const [{ data: printEvents, error: printEventsError }, { data: reclamos }] = await Promise.all([
+    admin
+      .from("pedido_print_events")
+      .select("*")
+      .eq("pedido_id", id)
+      .order("completed_at", { ascending: false }),
+    admin
+      .from("reclamos")
+      .select("id, numero_reclamo, texto, sucursal, estado, creado_en")
+      .eq("pedido_numero", (pedido as any).numero ?? "")
+      .order("creado_en", { ascending: false }),
+  ]);
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -175,10 +184,12 @@ export default async function DetallePedidoPage({
             className="px-3 py-1.5 rounded-lg bg-[#1a1a2e] text-white text-xs font-bold hover:bg-zinc-800 transition">
             Resumen PDF
           </a>
-          <a href={`/api/pdf/pedido/${id}?tipo=ticket`} target="_blank" rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-lg bg-[#f5a623] text-[#1a1a2e] text-xs font-bold hover:bg-amber-400 transition">
-            Ticket pedido
-          </a>
+          {(pedido as any).estado !== "Presupuesto" && (
+            <a href={`/api/pdf/pedido/${id}?tipo=ticket`} target="_blank" rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-lg bg-[#f5a623] text-[#1a1a2e] text-xs font-bold hover:bg-amber-400 transition">
+              Ticket pedido
+            </a>
+          )}
           {["Listo para retirar", "Entregado"].includes(String((pedido as any).estado ?? "")) && (
             <a href={`/api/pdf/pedido/${id}?tipo=entrega`} target="_blank" rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition">
@@ -188,8 +199,15 @@ export default async function DetallePedidoPage({
         </div>
       </div>
 
+      {(pedido as any).estado === "Presupuesto" && (
+        <PresupuestoBanner pedidoId={id} />
+      )}
       <PrintStatsPanel events={(printEvents as any[]) ?? []} error={printEventsError?.message} />
       <PedidoDetalleEditor pedido={pedido as any} itemsIniciales={items} archivos={archivos} />
+      <ReclamosPanel
+        pedidoNumero={(pedido as any).numero ?? ""}
+        reclamosIniciales={(reclamos as any[]) ?? []}
+      />
     </div>
   );
 }

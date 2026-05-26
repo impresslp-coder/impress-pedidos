@@ -31,6 +31,7 @@ export async function crearPedido(formData: FormData) {
 
   const clienteId          = formData.get("cliente_id") as string;
   const itemsJson          = formData.get("items") as string;
+  const comoPresupuesto    = formData.get("como_presupuesto") === "true";
   const senia              = parseFloat(formData.get("senia") as string) || 0;
   const medioPago          = formData.get("medio_pago") as string;
   const viaContacto        = formData.get("via_contacto") as string;
@@ -62,7 +63,7 @@ export async function crearPedido(formData: FormData) {
       codigo_unico:        codigoUnico,
       usuario_id:          user.id,
       cliente_id:          clienteId,
-      estado:              "Encargo recibido",
+      estado:              comoPresupuesto ? "Presupuesto" : "Encargo recibido",
       senia,
       medio_pago:          medioPago          || undefined,
       via_contacto:        viaContacto        || undefined,
@@ -94,7 +95,7 @@ export async function crearPedido(formData: FormData) {
 
   await supabase.from("registro").insert({
     referencia: numero,
-    mensaje: `Pedido creado (${codigoUnico}) — ${items.length} item(s)`,
+    mensaje: `${comoPresupuesto ? "Presupuesto" : "Pedido"} creado (${codigoUnico}) — ${items.length} item(s)`,
     usuario_id: user.id,
   });
 

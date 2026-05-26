@@ -10,7 +10,7 @@ import {
   registrarQuejaPedido,
 } from "./actions";
 
-const ESTADOS = ["Todos", "Encargo recibido", "En proceso", "Listo para retirar", "Entregado", "Cancelado"];
+const ESTADOS = ["Todos", "Presupuesto", "Encargo recibido", "En proceso", "Listo para retirar", "Entregado", "Cancelado"];
 
 type ItemPedido = { producto: string | null; precio: number | null; paginas?: number | null; modo?: string | null };
 type Sucursal = { id: string; nombre: string };

@@ -407,9 +407,10 @@ export default function PedidoForm({
   const router = useRouter();
   const { startUploads } = useUpload();
   const [isPending, startTransition] = useTransition();
+  const [isPendingPresup, startTransitionPresup] = useTransition();
   const [error, setError] = useState<string>();
   const [showSucursalModal, setShowSucursalModal] = useState(false);
-  const [savedPedido, setSavedPedido] = useState<{ pedidoId: string; numero: string; codigoUnico?: string } | null>(null);
+  const [savedPedido, setSavedPedido] = useState<{ pedidoId: string; numero: string; codigoUnico?: string; mode: "pedido" | "presupuesto" } | null>(null);
 
   const defaultFaz       = (config.default_faz            ?? "simple") as Faz;
   const defaultEnc       = (config.default_encuadernacion ?? "sin")    as Encuadernacion;
@@ -570,7 +571,37 @@ export default function PedidoForm({
 
         // Navigate immediately — uploads continue in background via context
         if (allPdfs.length) startUploads(allPdfs);
-        setSavedPedido({ pedidoId: res.pedidoId!, numero: res.numero ?? "", codigoUnico: res.codigoUnico });
+        setSavedPedido({ pedidoId: res.pedidoId!, numero: res.numero ?? "", codigoUnico: res.codigoUnico, mode: "pedido" });
+      });
+    });
+  };
+
+  const handleSaveAsPresupuesto = () => {
+    if (!clienteId) { setError("Seleccioná un cliente"); return; }
+    if (!items.length) { setError("Agregá al menos un producto"); return; }
+    setError(undefined);
+    const fd = new FormData();
+    fd.set("cliente_id",      clienteId);
+    fd.set("items",           JSON.stringify(items.map(({ _key, _pdfs, ...rest }) => rest)));
+    fd.set("como_presupuesto", "true");
+    fd.set("senia",           "0");
+    fd.set("medio_pago",      "");
+    fd.set("via_contacto",    "");
+    fd.set("prioridad",       "normal");
+    fd.set("mensaje",         "");
+    fd.set("telefono_contacto", clienteTelefono);
+    fd.set("quien_cargo_codigo", "");
+    fd.set("sucursal_produccion", "");
+    fd.set("sucursal_retiro", "");
+    startTransitionPresup(() => {
+      crearPedido(fd).then(async (res) => {
+        if (!res || res.error) { if (res?.error) setError(res.error); return; }
+        const allPdfs: { file: File; pedidoId: string }[] = [];
+        for (const item of items) for (const pdf of item._pdfs ?? []) {
+          allPdfs.push({ file: pdf, pedidoId: res.pedidoId! });
+        }
+        if (allPdfs.length) startUploads(allPdfs);
+        setSavedPedido({ pedidoId: res.pedidoId!, numero: res.numero ?? "", codigoUnico: res.codigoUnico, mode: "presupuesto" });
       });
     });
   };
@@ -589,34 +620,48 @@ export default function PedidoForm({
 
   // ── Success screen ──
   if (savedPedido) {
+    const esPresupuesto = savedPedido.mode === "presupuesto";
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] py-12 space-y-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center">
-          <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
+        <div className={`w-20 h-20 rounded-full flex items-center justify-center ${esPresupuesto ? "bg-blue-100" : "bg-emerald-100"}`}>
+          {esPresupuesto ? (
+            <span className="text-4xl">📄</span>
+          ) : (
+            <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
         </div>
         <div>
-          <h2 className="text-2xl font-black text-zinc-800">¡Pedido guardado!</h2>
+          <h2 className="text-2xl font-black text-zinc-800">
+            {esPresupuesto ? "¡Presupuesto guardado!" : "¡Pedido guardado!"}
+          </h2>
           <p className="text-zinc-500 mt-1 font-mono text-sm">N° {savedPedido.numero}</p>
           {savedPedido.codigoUnico && (
             <p className="text-xs text-zinc-400 font-mono mt-0.5">{savedPedido.codigoUnico}</p>
           )}
+          {esPresupuesto && (
+            <p className="text-sm text-blue-600 mt-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2">
+              Podés convertirlo en pedido cuando el cliente confirme.
+            </p>
+          )}
         </div>
-        <div className="flex gap-3 flex-wrap justify-center">
-          <a href={`/api/pdf/pedido/${savedPedido.pedidoId}?tipo=resumen`} target="_blank" rel="noopener noreferrer"
-            className="px-5 py-3 rounded-xl bg-[#1a1a2e] text-white font-bold text-sm hover:bg-zinc-800 transition flex items-center gap-2">
-            📄 Bajar resumen
-          </a>
-          <a href={`/api/pdf/pedido/${savedPedido.pedidoId}?tipo=ticket`} target="_blank" rel="noopener noreferrer"
-            className="px-5 py-3 rounded-xl bg-[#f5a623] text-[#1a1a2e] font-bold text-sm hover:bg-amber-400 transition flex items-center gap-2">
-            🖨️ Bajar ticket
-          </a>
-        </div>
-        <div className="flex gap-4">
+        {!esPresupuesto && (
+          <div className="flex gap-3 flex-wrap justify-center">
+            <a href={`/api/pdf/pedido/${savedPedido.pedidoId}?tipo=resumen`} target="_blank" rel="noopener noreferrer"
+              className="px-5 py-3 rounded-xl bg-[#1a1a2e] text-white font-bold text-sm hover:bg-zinc-800 transition flex items-center gap-2">
+              📄 Bajar resumen
+            </a>
+            <a href={`/api/pdf/pedido/${savedPedido.pedidoId}?tipo=ticket`} target="_blank" rel="noopener noreferrer"
+              className="px-5 py-3 rounded-xl bg-[#f5a623] text-[#1a1a2e] font-bold text-sm hover:bg-amber-400 transition flex items-center gap-2">
+              🖨️ Bajar ticket
+            </a>
+          </div>
+        )}
+        <div className="flex gap-4 flex-wrap justify-center">
           <Link href={`/pedidos/${savedPedido.pedidoId}`}
             className="text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-700">
-            Ver detalle del pedido →
+            {esPresupuesto ? "Ver presupuesto →" : "Ver detalle del pedido →"}
           </Link>
           <button type="button" onClick={() => { setSavedPedido(null); }}
             className="text-sm text-[#f5a623] font-semibold hover:underline">
@@ -721,9 +766,13 @@ export default function PedidoForm({
               </div>
             )}
             {error && <p className="rounded-xl bg-red-900/30 border border-red-500/30 px-3 py-2 text-xs text-red-400">{error}</p>}
-            <button type="button" onClick={handleSubmit} disabled={isPending || !clienteId || items.length === 0}
+            <button type="button" onClick={handleSubmit} disabled={isPending || isPendingPresup || !clienteId || items.length === 0}
               className="w-full py-3 rounded-xl bg-[#f5a623] text-[#1a1a2e] font-black text-sm hover:bg-[#d4881a] disabled:opacity-40 transition shadow-lg shadow-amber-500/20">
               {isPending ? "Guardando..." : "✓ Confirmar pedido"}
+            </button>
+            <button type="button" onClick={handleSaveAsPresupuesto} disabled={isPending || isPendingPresup || !clienteId || items.length === 0}
+              className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition">
+              {isPendingPresup ? "Guardando..." : "📄 Guardar como Presupuesto"}
             </button>
             <button type="button" onClick={() => router.back()}
               className="w-full py-2 rounded-xl bg-zinc-800 text-zinc-400 text-xs font-medium hover:bg-zinc-700 transition">

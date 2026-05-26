@@ -3,6 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+export async function convertirEnPedido(pedidoId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pedidos")
+    .update({ estado: "Encargo recibido" })
+    .eq("id", pedidoId)
+    .eq("estado", "Presupuesto");
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/pedidos/${pedidoId}`);
+  revalidatePath("/pedidos");
+  return { ok: true };
+}
+
 export async function actualizarEstado(pedidoId: string, nuevoEstado: string) {
   const supabase = await createClient();
   const { error } = await supabase

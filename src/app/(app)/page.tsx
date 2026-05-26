@@ -32,11 +32,7 @@ export default async function DashboardPage() {
 
   const acciones = [
     { href: "/pedidos/nuevo", label: "➕ Nuevo pedido", color: "bg-[#f5a623] text-[#1a1a2e]" },
-    { href: "/presupuestos/nuevo", label: "📄 Nuevo presupuesto", color: "bg-blue-600 text-white" },
     { href: "/ventas", label: "🛒 Venta de útiles", color: "bg-emerald-600 text-white" },
-    { href: "/terciarizados/nuevo", label: "📦 Encargo terciarizado", color: "bg-purple-600 text-white" },
-    { href: "/clientes/nuevo", label: "👤 Agregar cliente", color: "bg-zinc-700 text-white" },
-    { href: "/reclamos", label: "⚠️ Reclamos", color: "bg-red-600 text-white" },
   ];
 
   return (
@@ -68,7 +64,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
           Acciones rápidas
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 max-w-sm">
           {acciones.map((a) => (
             <Link
               key={a.href}
@@ -140,7 +136,8 @@ export default async function DashboardPage() {
 
 function EstadoBadge({ estado }: { estado: string | null }) {
   const colores: Record<string, string> = {
-    "Encargo recibido": "bg-blue-100 text-blue-700",
+    "Presupuesto": "bg-blue-100 text-blue-700",
+    "Encargo recibido": "bg-indigo-100 text-indigo-700",
     "En proceso": "bg-amber-100 text-amber-700",
     "Listo para retirar": "bg-emerald-100 text-emerald-700",
     "Entregado": "bg-zinc-100 text-zinc-500",
