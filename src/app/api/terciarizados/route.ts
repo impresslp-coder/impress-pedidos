@@ -11,15 +11,17 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  const cliente   = (body.cliente   ?? "").trim();
-  const telefono  = (body.telefono  ?? "").trim();
-  const item      = (body.item      ?? "").trim();
-  const cantidad  = body.cantidad ? parseInt(body.cantidad) : null;
-  const anotacion = (body.anotacion ?? "").trim();
-  const proveedor = (body.proveedor ?? "").trim();
-  const sucursal  = (body.sucursal  ?? "").trim();
-  const total     = parseFloat(body.total) || 0;
-  const senia     = parseFloat(body.senia) || 0;
+  const cliente              = (body.cliente   ?? "").trim();
+  const telefono             = (body.telefono  ?? "").trim();
+  const item                 = (body.item      ?? "").trim();
+  const cantidad             = body.cantidad ? parseInt(body.cantidad) : null;
+  const anotacion            = (body.anotacion ?? "").trim();
+  const proveedor            = (body.proveedor ?? "").trim();
+  const sucursal             = (body.sucursal  ?? "").trim();
+  const total                = parseFloat(body.total) || 0;
+  const senia                = parseFloat(body.senia) || 0;
+  const proveedor_articulo_id = body.proveedor_articulo_id?.trim() || null;
+  const precio_costo         = body.precio_costo != null ? parseFloat(body.precio_costo) : null;
 
   if (!cliente || !item || !proveedor) {
     return NextResponse.json(
@@ -28,7 +30,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Usar admin client para el counter (necesita bypassear RLS)
   const { data: counterData, error: counterError } = await admin.rpc("next_counter", { p_nombre: "terciarizados" });
   if (counterError) return NextResponse.json({ error: `Error al generar número: ${counterError.message}` }, { status: 500 });
 
@@ -47,16 +48,18 @@ export async function POST(req: NextRequest) {
       numero,
       usuario_id: user.id,
       cliente,
-      telefono:  telefono  || null,
+      telefono:              telefono              || null,
       item,
-      cantidad:  cantidad  || null,
-      anotacion: anotacion || null,
+      cantidad:              cantidad              || null,
+      anotacion:             anotacion             || null,
       proveedor,
-      sucursal:  sucursal  || null,
+      sucursal:              sucursal              || null,
       total,
       senia,
       mensaje,
-      estado: "Encargo recibido",
+      estado:                "Encargo recibido",
+      proveedor_articulo_id: proveedor_articulo_id || null,
+      precio_costo:          precio_costo          ?? null,
     })
     .select()
     .single();

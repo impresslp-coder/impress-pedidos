@@ -18,21 +18,21 @@ export default async function AdminProveedoresPage() {
     .single();
   if (perfil?.rol !== "admin") redirect("/");
 
-  const { data: configs } = await supabase
-    .from("config_proveedores")
-    .select("*")
-    .order("proveedor");
+  const { data: proveedores } = await admin
+    .from("proveedores")
+    .select("*, proveedor_articulos(*)")
+    .order("nombre")
+    .order("nombre", { referencedTable: "proveedor_articulos" });
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-800">Config. proveedores terciarizados</h1>
+        <h1 className="text-2xl font-bold text-zinc-800">Proveedores</h1>
         <p className="text-sm text-zinc-500 mt-1">
-          Precio base y porcentaje de markup para el cálculo automático del total en encargos.
-          Esta pantalla es solo visible para administradores.
+          Listado de proveedores con sus artículos, precios de costo, markup y tiempos de entrega.
         </p>
       </div>
-      <ProveedoresManager configs={configs ?? []} />
+      <ProveedoresManager proveedores={proveedores ?? []} />
     </div>
   );
 }

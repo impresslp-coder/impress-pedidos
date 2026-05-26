@@ -1,41 +1,72 @@
-import { createClient } from "@/lib/supabase/server";
-import PedidoForm from "./pedido-form";
+import Link from "next/link";
 
-export default async function NuevoPedidoPage() {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  const admin = (await import("@/lib/supabase/admin")).createAdminClient();
-
-  const [
-    { data: clientes }, { data: productos }, { data: parametros },
-    { data: configRows }, { data: sucursales }, { data: perfil },
-  ] = await Promise.all([
-    supabase.from("clientes").select("id, nombre, telefono, cod_pais").eq("activo", true).order("nombre"),
-    supabase.from("productos").select("id, nombre, paginas, precio_d, precio_e, precio_f, precio_g, categoria").eq("activo", true).order("nombre"),
-    supabase.from("parametros_precio").select("id, nombre, precio, divisor, descuento_maximo").eq("activo", true).order("nombre"),
-    supabase.from("configuracion").select("clave, valor"),
-    supabase.from("sucursales").select("id, nombre").eq("activo", true).order("nombre"),
-    user ? admin.from("usuarios_sistema").select("codigo_personal").eq("id", user.id).single() : Promise.resolve({ data: null }),
-  ]);
-
-  const config: Record<string, string> = {};
-  for (const row of configRows ?? []) config[row.clave] = row.valor;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const codigoPersonal: string | null = (perfil as any)?.codigo_personal ?? null;
-
+export default function NuevoPedidoChoicePage() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-zinc-800 mb-6">Nuevo pedido</h1>
-      <PedidoForm
-        clientes={clientes ?? []}
-        productos={productos ?? []}
-        parametros={parametros ?? []}
-        config={config}
-        sucursales={sucursales ?? []}
-        codigoPersonal={codigoPersonal}
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-800">¿Qué tipo de pedido es?</h1>
+        <p className="text-sm text-zinc-500 mt-1">
+          Elegí si es un pedido estándar o un encargo a un proveedor externo.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+
+        {/* Pedido normal */}
+        <Link
+          href="/pedidos/nuevo/pedido"
+          className="group flex flex-col gap-3 bg-white rounded-2xl border-2 border-zinc-200 hover:border-[#f5a623] p-6 shadow-sm hover:shadow-md transition-all"
+        >
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+            style={{ backgroundColor: "#1a1a2e" }}
+          >
+            📋
+          </div>
+          <div>
+            <p className="text-base font-bold text-zinc-800 group-hover:text-[#1a1a2e]">
+              Pedido estándar
+            </p>
+            <p className="text-sm text-zinc-500 mt-1">
+              Impresiones, encuadernados, apuntes y otros trabajos propios del local.
+            </p>
+          </div>
+          <span
+            className="mt-auto inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg w-fit transition"
+            style={{ backgroundColor: "#f5a623", color: "#1a1a2e" }}
+          >
+            Nuevo pedido →
+          </span>
+        </Link>
+
+        {/* Encargo terciarizado */}
+        <Link
+          href="/terciarizados/nuevo"
+          className="group flex flex-col gap-3 bg-white rounded-2xl border-2 border-zinc-200 hover:border-[#f5a623] p-6 shadow-sm hover:shadow-md transition-all"
+        >
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+            style={{ backgroundColor: "#1a1a2e" }}
+          >
+            🏭
+          </div>
+          <div>
+            <p className="text-base font-bold text-zinc-800 group-hover:text-[#1a1a2e]">
+              Encargo terciarizado
+            </p>
+            <p className="text-sm text-zinc-500 mt-1">
+              Stickers, lonas, tarjetas u otros trabajos que realizan proveedores externos.
+            </p>
+          </div>
+          <span
+            className="mt-auto inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg w-fit transition"
+            style={{ backgroundColor: "#f5a623", color: "#1a1a2e" }}
+          >
+            Nuevo encargo →
+          </span>
+        </Link>
+
+      </div>
     </div>
   );
 }
