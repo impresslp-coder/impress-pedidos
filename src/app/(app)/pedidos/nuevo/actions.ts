@@ -41,6 +41,7 @@ export async function crearPedido(formData: FormData) {
   const quienCargoCodigo   = formData.get("quien_cargo_codigo") as string;
   const sucursalProduccion = formData.get("sucursal_produccion") as string;
   const sucursalRetiro     = formData.get("sucursal_retiro") as string;
+  const imprimirTapas      = formData.get("imprimir_tapas") === "true";
 
   if (!clienteId) return { error: "Seleccioná un cliente" };
   if (!itemsJson)  return { error: "Agregá al menos un producto" };
@@ -73,6 +74,7 @@ export async function crearPedido(formData: FormData) {
       quien_cargo_codigo:  quienCargoCodigo   || undefined,
       sucursal_produccion: sucursalProduccion || undefined,
       sucursal_retiro:     sucursalRetiro     || undefined,
+      imprimir_tapas:      imprimirTapas      || undefined,
     })
     .select("id")
     .single();

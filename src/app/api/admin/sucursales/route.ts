@@ -9,7 +9,7 @@ async function checkAdmin() {
 
 export async function GET() {
   const admin = await checkAdmin();
-  const { data, error } = await admin.from("sucursales").select("*").order("nombre");
+  const { data, error } = await admin.from("sucursales").select("id, nombre").eq("activo", true).order("nombre");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ sucursales: data });
 }

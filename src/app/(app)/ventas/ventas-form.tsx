@@ -148,7 +148,10 @@ export default function VentasForm({
   const [nextKey, setNextKey] = useState(0);
   const [stockLocal, setStockLocal] = useState<Record<string, number>>(stockMap);
   const [medioPago, setMedioPago] = useState("efectivo");
-  const [sucursal, setSucursal] = useState(sucursales[0]?.nombre ?? "");
+  const sucursalGuardada = typeof window !== "undefined"
+    ? (localStorage.getItem("impress_sucursal_activa") ?? "")
+    : "";
+  const [sucursal, setSucursal] = useState(sucursalGuardada || sucursales[0]?.nombre || "");
   const [codigoPersonal, setCodigoPersonal] = useState("");
   const [isPending, startTransition] = useTransition();
   const [ventaOk, setVentaOk] = useState<string | null>(null);

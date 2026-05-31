@@ -53,6 +53,7 @@ const s = StyleSheet.create({
 
 export function ResumenPedidoDoc({ pedido }: { pedido: PedidoPDF }) {
   const resta = pedido.total - pedido.senia;
+  const esPresupuesto = pedido.estado === "Presupuesto";
 
   return (
     <Document>
@@ -64,7 +65,7 @@ export function ResumenPedidoDoc({ pedido }: { pedido: PedidoPDF }) {
             <Text style={s.tagline}>Imprimí con confianza · Imprimi con Impress</Text>
           </View>
           <View style={s.hRight}>
-            <Text style={s.hDoc}>Resumen de pedido</Text>
+            <Text style={s.hDoc}>{esPresupuesto ? "Presupuesto" : "Resumen de pedido"}</Text>
             <Text style={s.hNum}>N° {pedido.numero}</Text>
           </View>
         </View>
@@ -92,7 +93,7 @@ export function ResumenPedidoDoc({ pedido }: { pedido: PedidoPDF }) {
 
           {/* Financiero */}
           <View style={s.finBox}>
-            <Text style={s.finTotal}>Total del pedido: {fmtARS(pedido.total)}</Text>
+            <Text style={s.finTotal}>{esPresupuesto ? "Total del presupuesto" : "Total del pedido"}: {fmtARS(pedido.total)}</Text>
             <View style={s.finRow}>
               <View style={s.finCol}>
                 <Text style={s.label}>Abonado</Text>

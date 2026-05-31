@@ -231,8 +231,12 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
   onClose: () => void;
 }) {
   const defaultSenia = Math.round(total / 2 * 100) / 100;
-  const [sucProd, setSucProd] = useState(sucursales[0]?.nombre ?? "");
-  const [sucRetiro, setSucRetiro] = useState(sucursales[0]?.nombre ?? "");
+  const sucursalGuardada = typeof window !== "undefined"
+    ? (localStorage.getItem("impress_sucursal_activa") ?? "")
+    : "";
+  const sucursalDefault = sucursalGuardada || sucursales[0]?.nombre || "";
+  const [sucProd, setSucProd] = useState(sucursalDefault);
+  const [sucRetiro, setSucRetiro] = useState(sucursalDefault);
   const [senia, setSenia] = useState("");
   const [codigoOp, setCodigoOp] = useState("");
   const [errorSenia, setErrorSenia] = useState<string>();
@@ -446,6 +450,7 @@ export default function PedidoForm({
   const [paramId, setParamId] = useState(() => getParamIdForFaz(defaultFaz));
   const [descuento, setDescuento] = useState("0");
   const [anotacion, setAnotacion] = useState("");
+  const [imprimirTapas, setImprimirTapas] = useState(false);
   const [showDescModal, setShowDescModal] = useState(false);
 
   const [items, setItems] = useState<(ItemPedidoInput & { _key: number; _pdfs?: File[] })[]>([]);
@@ -559,6 +564,7 @@ export default function PedidoForm({
     fd.set("quien_cargo_codigo", modalData.codigoOperador);
     fd.set("sucursal_produccion", modalData.sucursalProd);
     fd.set("sucursal_retiro",    modalData.sucursalRetiro);
+    fd.set("imprimir_tapas",     String(imprimirTapas));
 
     startTransition(() => {
       crearPedido(fd).then(async (res) => {
@@ -908,13 +914,26 @@ export default function PedidoForm({
                 <div className="rounded-2xl border-2 border-violet-100 bg-violet-50/50 p-3">
                   <p className="text-xs font-black text-violet-600 uppercase tracking-wide mb-2">Encuadernación</p>
                   <div className="flex gap-2 flex-wrap">
-                    <OptBtn sel={encuadernacion === "sin"} onClick={() => setEncuadernacion("sin")} accent="violet"
+                    <OptBtn sel={encuadernacion === "sin"} onClick={() => { setEncuadernacion("sin"); setImprimirTapas(false); }} accent="violet"
                       icon={<IcoSinEnc s={encuadernacion === "sin"} />} label="Sin" />
-                    <OptBtn sel={encuadernacion === "anillado"} onClick={() => setEncuadernacion("anillado")} accent="violet"
+                    <OptBtn sel={encuadernacion === "anillado"} onClick={() => { setEncuadernacion("anillado"); setImprimirTapas(false); }} accent="violet"
                       icon={<IcoAnillado s={encuadernacion === "anillado"} />} label="Anillado" />
                     <OptBtn sel={encuadernacion === "encuadernado"} onClick={() => setEncuadernacion("encuadernado")} accent="violet"
                       icon={<IcoEncuadernado s={encuadernacion === "encuadernado"} />} label="Encuad." />
                   </div>
+                  {encuadernacion === "encuadernado" && (
+                    <button type="button" onClick={() => setImprimirTapas((v) => !v)}
+                      className={`mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-bold transition ${
+                        imprimirTapas
+                          ? "border-violet-500 bg-violet-100 text-violet-800"
+                          : "border-zinc-200 bg-white text-zinc-500 hover:border-violet-300"
+                      }`}>
+                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${imprimirTapas ? "border-violet-500 bg-violet-500" : "border-zinc-300"}`}>
+                        {imprimirTapas && <span className="text-white text-[10px] leading-none">✓</span>}
+                      </span>
+                      Imprimir tapa y contratapa
+                    </button>
+                  )}
                 </div>
                 <div className="rounded-2xl border-2 border-emerald-100 bg-emerald-50/50 p-3">
                   <p className="text-xs font-black text-emerald-600 uppercase tracking-wide mb-2">Abrochado</p>

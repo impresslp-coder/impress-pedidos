@@ -10,25 +10,33 @@ const ESTADOS_ACTIVOS = [
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  const [{ data: pedidosActivos }, { data: pedidosHoy }, { data: ultimosPedidos }] =
-    await Promise.all([
-      supabase
-        .from("pedidos")
-        .select("id", { count: "exact", head: true })
-        .in("estado", ESTADOS_ACTIVOS),
-      supabase
-        .from("pedidos")
-        .select("id", { count: "exact", head: true })
-        .gte("fecha", new Date().toISOString().split("T")[0]),
-      supabase
-        .from("pedidos")
-        .select(`
-          id, numero, fecha, estado, sucursal,
-          clientes ( nombre )
-        `)
-        .order("creado_en", { ascending: false })
-        .limit(10),
-    ]);
+  const [
+    { data: pedidosActivos },
+    { data: pedidosHoy },
+    { data: presupuestosPendientes },
+    { data: ultimosPedidos },
+  ] = await Promise.all([
+    supabase
+      .from("pedidos")
+      .select("id", { count: "exact", head: true })
+      .in("estado", ESTADOS_ACTIVOS),
+    supabase
+      .from("pedidos")
+      .select("id", { count: "exact", head: true })
+      .gte("fecha", new Date().toISOString().split("T")[0]),
+    supabase
+      .from("pedidos")
+      .select("id", { count: "exact", head: true })
+      .eq("estado", "Presupuesto"),
+    supabase
+      .from("pedidos")
+      .select(`
+        id, numero, fecha, estado, sucursal,
+        clientes ( nombre )
+      `)
+      .order("creado_en", { ascending: false })
+      .limit(10),
+  ]);
 
   const acciones = [
     { href: "/pedidos/nuevo", label: "➕ Nuevo pedido", color: "bg-[#f5a623] text-[#1a1a2e]" },
@@ -44,7 +52,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div className="bg-white rounded-xl border border-zinc-200 p-5 shadow-sm">
           <p className="text-sm text-zinc-500">Pedidos activos</p>
           <p className="text-3xl font-black text-[#1a1a2e] mt-1">
@@ -57,6 +65,20 @@ export default async function DashboardPage() {
             {pedidosHoy ?? "—"}
           </p>
         </div>
+        <Link
+          href="/pedidos?estado=Presupuesto"
+          className="rounded-xl border-2 p-5 shadow-sm transition hover:shadow-md col-span-2 sm:col-span-1 flex items-center justify-between gap-3 group"
+          style={{ borderColor: "#bfdbfe", backgroundColor: "#eff6ff" }}
+        >
+          <div>
+            <p className="text-sm text-blue-600">Presupuestos</p>
+            <p className="text-3xl font-black text-blue-700 mt-1">
+              {presupuestosPendientes ?? "—"}
+            </p>
+            <p className="text-xs text-blue-400 mt-0.5">pendientes de confirmar</p>
+          </div>
+          <span className="text-2xl opacity-60 group-hover:opacity-100 transition">📄</span>
+        </Link>
       </div>
 
       {/* Acciones rápidas */}

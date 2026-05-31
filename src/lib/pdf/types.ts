@@ -20,6 +20,7 @@ export type PedidoPDF = {
   sucursal_produccion?: string | null;
   mensaje?: string | null;
   medio_pago?: string | null;
+  estado?: string | null;
 };
 
 export function fmtARS(n: number) {

@@ -202,6 +202,14 @@ export default async function DetallePedidoPage({
       {(pedido as any).estado === "Presupuesto" && (
         <PresupuestoBanner pedidoId={id} />
       )}
+      {(pedido as any).imprimir_tapas && (
+        <div className="rounded-xl border-2 border-violet-200 bg-violet-50 px-5 py-3 flex items-center gap-3">
+          <span className="text-2xl">📚</span>
+          <p className="font-bold text-violet-800 text-sm">
+            Este pedido requiere imprimir <span className="underline">tapa y contratapa</span> antes de entregar.
+          </p>
+        </div>
+      )}
       <PrintStatsPanel events={(printEvents as any[]) ?? []} error={printEventsError?.message} />
       <PedidoDetalleEditor pedido={pedido as any} itemsIniciales={items} archivos={archivos} />
       <ReclamosPanel

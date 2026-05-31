@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+import StockSucursalModal from "./stock-sucursal-modal";
 
 type Producto = {
   id: string; nombre: string; categoria?: string | null;
@@ -315,6 +316,7 @@ export default function ProductosView({ productos: initial, stockMap: initialSto
   const [cat, setCat] = useState("");
   const [editing, setEditing] = useState<Producto | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Producto | null>(null);
+  const [stockSucursalProd, setStockSucursalProd] = useState<Producto | null>(null);
   const [showAgregar, setShowAgregar] = useState(false);
   const [importing, startImport] = useTransition();
   const [importMsg, setImportMsg] = useState<string>();
@@ -429,6 +431,12 @@ export default function ProductosView({ productos: initial, stockMap: initialSto
                       📦 Stock: {stock}{stock <= 3 && stock > 0 ? " ⚠️" : stock <= 0 ? " — sin stock" : ""}
                     </p>
                   )}
+                  {/* Botón stock por sucursal — visible para todos */}
+                  <button type="button"
+                    onClick={() => setStockSucursalProd(prod)}
+                    className="w-full py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold hover:bg-blue-100 transition border border-blue-100">
+                    🏪 Ver stock x sucursal
+                  </button>
                   {esAdmin && (
                     <div className="flex gap-2 pt-1 border-t border-zinc-100">
                       <button type="button" onClick={() => setEditing(prod)}
@@ -490,6 +498,15 @@ export default function ProductosView({ productos: initial, stockMap: initialSto
             </div>
           </div>
         </div>
+      )}
+
+      {stockSucursalProd && (
+        <StockSucursalModal
+          productoId={stockSucursalProd.id}
+          productoNombre={stockSucursalProd.nombre}
+          esAdmin={esAdmin}
+          onClose={() => setStockSucursalProd(null)}
+        />
       )}
     </div>
   );

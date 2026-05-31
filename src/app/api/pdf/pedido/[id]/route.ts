@@ -56,6 +56,7 @@ export async function GET(
     sucursal_produccion: pedido.sucursal_produccion ?? null,
     mensaje: pedido.mensaje ?? null,
     medio_pago: pedido.medio_pago ?? null,
+    estado: pedido.estado ?? null,
   };
 
   if (tipo === "entrega" && !["Listo para retirar", "Entregado"].includes(String(pedido.estado ?? ""))) {

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logout } from "@/app/login/actions";
 import { UploadProvider } from "./upload-context";
 import { CajaMenu } from "./caja-menu";
+import SucursalSelector from "./sucursal-selector";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -27,6 +28,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/productos", label: "Productos" },
     { href: "/estadisticas", label: "Estadisticas" },
     ...(esAdmin ? [
+      { href: "/admin/cola", label: "Cola" },
+      { href: "/admin/presentismo", label: "Presentismo" },
+      { href: "/admin/impresoras", label: "Impresoras" },
       { href: "/admin/precios", label: "Precios" },
       { href: "/admin/proveedores", label: "Proveedores" },
       { href: "/admin/usuarios", label: "Usuarios" },
@@ -51,6 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               ))}
             </nav>
             <div className="flex items-center gap-3 shrink-0">
+              <SucursalSelector />
               <CajaMenu userName={perfil?.nombre || user.email || "Usuario"} />
               <form action={logout}>
                 <button type="submit"

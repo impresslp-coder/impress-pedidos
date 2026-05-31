@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  const cliente_id           = body.cliente_id?.trim()  || null;
   const cliente              = (body.cliente   ?? "").trim();
   const telefono             = (body.telefono  ?? "").trim();
   const item                 = (body.item      ?? "").trim();
@@ -23,9 +24,9 @@ export async function POST(req: NextRequest) {
   const proveedor_articulo_id = body.proveedor_articulo_id?.trim() || null;
   const precio_costo         = body.precio_costo != null ? parseFloat(body.precio_costo) : null;
 
-  if (!cliente || !item || !proveedor) {
+  if (!cliente || !item) {
     return NextResponse.json(
-      { error: "Cliente, item y proveedor son obligatorios" },
+      { error: "Cliente e ítem son obligatorios" },
       { status: 400 }
     );
   }
@@ -46,7 +47,8 @@ export async function POST(req: NextRequest) {
     .from("terciarizados")
     .insert({
       numero,
-      usuario_id: user.id,
+      usuario_id:  user.id,
+      cliente_id:  cliente_id  || null,
       cliente,
       telefono:              telefono              || null,
       item,

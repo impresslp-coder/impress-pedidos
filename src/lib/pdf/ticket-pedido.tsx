@@ -68,6 +68,10 @@ const s = StyleSheet.create({
   numText: { fontSize: 13, fontFamily: "Helvetica-Bold", letterSpacing: 3, marginBottom: 4 },
   numBars: { marginBottom: 4 },
   numSub: { fontSize: 11, color: C.dark, fontFamily: "Helvetica-Bold", letterSpacing: 2 },
+
+  // Legal footer
+  legalBlock: { paddingHorizontal: MH, paddingTop: 10, paddingBottom: 8, alignItems: "center", gap: 2 },
+  legalLine: { fontSize: 7, fontFamily: "Helvetica", color: C.light, textAlign: "center" },
 });
 
 function Checkbox() {
@@ -249,6 +253,15 @@ export function TicketPedidoDoc({ pedido }: { pedido: PedidoPDF }) {
             <Barcode numero={pedido.numero} />
           </View>
           <Text style={s.numSub}>{pedido.numero}</Text>
+        </View>
+
+        {/* Legal footer */}
+        <View style={s.legalBlock}>
+          <Text style={s.legalLine}>— — — — — — — — — — — — — — —</Text>
+          <Text style={s.legalLine}>Este ticket no es válido como factura.</Text>
+          <Text style={s.legalLine}>Conservá este comprobante hasta retirar tu pedido.</Text>
+          <Text style={s.legalLine}>IMPRESS · 60 e/ 21 y 22 N°1347 · 41 N°1378 e/ 73 y 23</Text>
+          <Text style={s.legalLine}>Tel: 221-554-0877</Text>
         </View>
 
       </Page>
