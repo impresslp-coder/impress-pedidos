@@ -931,11 +931,9 @@ export default function PedidoForm({
                     <OptBtn sel={presentacion === "abrochado"} onClick={() => { setPresentacion("abrochado"); setImprimirTapas(false); }} accent="violet"
                       icon={<IcoAbrochado s={presentacion === "abrochado"} />} label="Abrochado" />
                     <OptBtn sel={presentacion === "anillado"} onClick={() => { setPresentacion("anillado"); setImprimirTapas(false); }} accent="violet"
-                      icon={<IcoAnillado s={presentacion === "anillado"} />}
-                      label={extraAnillado > 0 ? `Anillado (+${fmt(extraAnillado)})` : "Anillado"} />
+                      icon={<IcoAnillado s={presentacion === "anillado"} />} label="Anillado" />
                     <OptBtn sel={presentacion === "encuadernado"} onClick={() => setPresentacion("encuadernado")} accent="violet"
-                      icon={<IcoEncuadernado s={presentacion === "encuadernado"} />}
-                      label={extraEncuadernado > 0 ? `Encuadernado (+${fmt(extraEncuadernado)})` : "Encuadernado"} />
+                      icon={<IcoEncuadernado s={presentacion === "encuadernado"} />} label="Encuadernado" />
                   </div>
                   {presentacion === "encuadernado" && (
                     <button type="button" onClick={() => setImprimirTapas((v) => !v)}
