@@ -612,13 +612,27 @@ export default function PreciosManager({
             </div>
           </div>
 
-          {/* Extras de presentación en pedidos */}
+          {/* Precio por hoja + Extras de presentación en pedidos */}
           <div>
-            <p className="text-sm font-semibold text-zinc-700 mb-1">Extras de presentación (Pedidos)</p>
-            <p className="text-xs text-zinc-400 mb-3">Monto fijo que se suma al ítem cuando el cliente elige esta presentación. Suelto y Abrochado no varían el precio.</p>
-            <div className="grid grid-cols-2 gap-4 max-w-md">
+            <p className="text-sm font-semibold text-zinc-700 mb-1">Precios de Pedidos</p>
+            <p className="text-xs text-zinc-400 mb-3">
+              Precio por hoja fijo (aplica a simple y doble faz). Extras de anillado y encuadernado son montos fijos que se suman al ítem cuando el cliente elige esa presentación. Suelto y Abrochado no varían el precio.
+            </p>
+            <div className="grid grid-cols-3 gap-4 max-w-2xl">
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Anillado ($)</label>
+                <label className="block text-xs text-zinc-500 mb-1">Precio por hoja ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={cfg.pedidos_precio_hoja ?? "150"}
+                  onChange={(e) => setCfg((c) => ({ ...c, pedidos_precio_hoja: e.target.value }))}
+                  suppressHydrationWarning
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5a623]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Extra anillado ($)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -630,7 +644,7 @@ export default function PreciosManager({
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Encuadernado ($)</label>
+                <label className="block text-xs text-zinc-500 mb-1">Extra encuadernado ($)</label>
                 <input
                   type="number"
                   step="0.01"

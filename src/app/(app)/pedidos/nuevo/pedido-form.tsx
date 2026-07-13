@@ -428,6 +428,8 @@ export default function PedidoForm({
   })();
   const extraAnillado = parseFloat(config.pedidos_extra_anillado ?? "4250") || 0;
   const extraEncuadernado = parseFloat(config.pedidos_extra_encuadernado ?? "0") || 0;
+  const precioHoja = parseFloat(config.pedidos_precio_hoja ?? "150") || 150;
+  const descMaximoConfig = parseFloat(config.pedidos_desc_maximo ?? "100") || 100;
   const descuentosPredefinidos = (config.descuentos_predefinidos ?? "").split(",").map(Number).filter(Boolean);
 
   const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
@@ -450,11 +452,6 @@ export default function PedidoForm({
   const [presentacion, setPresentacion] = useState<Presentacion>(defaultPresentacion);
   const [pagPorHoja, setPagPorHoja] = useState<PagPorHoja>(defaultPPH);
 
-  const getParamIdForFaz = (f: Faz) => {
-    const div = f === "doble" ? 2 : 1;
-    return parametros.find((p) => p.divisor === div)?.id ?? parametros[0]?.id ?? "";
-  };
-  const [paramId, setParamId] = useState(() => getParamIdForFaz(defaultFaz));
   const [descuento, setDescuento] = useState("0");
   const [anotacion, setAnotacion] = useState("");
   const [imprimirTapas, setImprimirTapas] = useState(false);
@@ -463,25 +460,27 @@ export default function PedidoForm({
   const [items, setItems] = useState<(ItemPedidoInput & { _key: number; _pdfs?: File[] })[]>([]);
   const [nextKey, setNextKey] = useState(0);
 
-  const paramSel = parametros.find((p) => p.id === paramId);
-  const maxDesc  = paramSel?.descuento_maximo ?? 100;
-  const desc     = Math.min(parseFloat(descuento) || 0, maxDesc);
+  const maxDesc = descMaximoConfig;
+  const desc    = Math.min(parseFloat(descuento) || 0, maxDesc);
 
-  const calcPrecioPdf = (paginas: number) => {
-    if (!paramSel || paginas === 0) return 0;
-    return Math.ceil(Math.ceil(paginas / pagPorHoja) / paramSel.divisor) * paramSel.precio;
-  };
+  const paginasPorHojaEfectivas = pagPorHoja * (faz === "doble" ? 2 : 1);
+  const calcHojas = (paginas: number) =>
+    paginas > 0 ? Math.ceil(paginas / paginasPorHojaEfectivas) : 0;
+  const calcPrecioPdf = (paginas: number) => calcHojas(paginas) * precioHoja;
 
   const totalPaginas = pdfs.reduce((acc, p) => acc + (p.paginas ?? 0), 0);
-  const precioBase   = calcPrecioPdf(totalPaginas);
+  const totalHojas   = calcHojas(totalPaginas);
+  const precioBase   = totalHojas * precioHoja;
   const extraPresentacion =
     presentacion === "anillado" ? extraAnillado :
     presentacion === "encuadernado" ? extraEncuadernado : 0;
-  const precioConDesc = precioBase > 0 ? precioBase * (1 - desc / 100) : 0;
-  const precioFinal  = precioConDesc + (precioBase > 0 || totalPaginas > 0 ? extraPresentacion : 0);
+  const descuentoMonto = precioBase * (desc / 100);
+  const precioConDesc  = precioBase - descuentoMonto;
+  const hayTrabajo   = totalPaginas > 0;
+  const precioFinal  = hayTrabajo ? precioConDesc + extraPresentacion : 0;
   const todoContado  = pdfs.length > 0 && pdfs.every((p) => !p.contando && p.paginas !== null);
 
-  const handleFaz = (v: Faz) => { setFaz(v); setParamId(getParamIdForFaz(v)); };
+  const handleFaz = (v: Faz) => { setFaz(v); };
 
   const handlePDFs = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -513,7 +512,7 @@ export default function PedidoForm({
     setDescuento("0"); setAnotacion("");
     setFaz(defaultFaz); setPresentacion(defaultPresentacion);
     setPagPorHoja(defaultPPH);
-    setParamId(getParamIdForFaz(defaultFaz));
+    setImprimirTapas(false);
   };
 
   const agregarItem = () => {
@@ -861,7 +860,7 @@ export default function PedidoForm({
             {pdfs.length > 0 && (
               <div className="space-y-1.5">
                 {pdfs.map((p) => {
-                  const pHojas  = p.paginas ? Math.ceil(Math.ceil(p.paginas / pagPorHoja) / (paramSel?.divisor ?? 1)) : null;
+                  const pHojas  = p.paginas ? calcHojas(p.paginas) : null;
                   const pPrecio = p.paginas ? calcPrecioPdf(p.paginas) : null;
                   const pFinal  = pPrecio ? pPrecio * (1 - desc / 100) : null;
                   return (
@@ -890,11 +889,11 @@ export default function PedidoForm({
                     </div>
                   );
                 })}
-                {todoContado && pdfs.length > 1 && paramSel && (
+                {todoContado && pdfs.length > 1 && (
                   <div className="flex items-center gap-3 px-3 py-2 bg-[#f5a623]/10 rounded-xl border border-[#f5a623]/20 text-xs font-semibold">
                     <span className="text-zinc-600">Total: {totalPaginas} pág</span>
                     <span className="text-zinc-400">·</span>
-                    <span className="text-zinc-600">{Math.ceil(Math.ceil(totalPaginas / pagPorHoja) / paramSel.divisor)} hojas</span>
+                    <span className="text-zinc-600">{totalHojas} hojas</span>
                     <span className="text-zinc-400">·</span>
                     <span className="text-[#f5a623] font-black">{fmt(precioFinal)}</span>
                   </div>
@@ -958,6 +957,34 @@ export default function PedidoForm({
                 suppressHydrationWarning placeholder="Notas especiales (opcional)"
                 className="w-full rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623] transition" />
             </div>
+
+            {hayTrabajo && todoContado && (
+              <div className="rounded-2xl border-2 border-amber-100 bg-amber-50/40 p-4">
+                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Desglose</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between text-zinc-700">
+                    <span>{totalHojas} {totalHojas === 1 ? "hoja" : "hojas"} × {fmt(precioHoja)}</span>
+                    <span className="font-semibold">{fmt(precioBase)}</span>
+                  </div>
+                  {desc > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Descuento ({desc}%)</span>
+                      <span className="font-semibold">−{fmt(descuentoMonto)}</span>
+                    </div>
+                  )}
+                  {extraPresentacion > 0 && (
+                    <div className="flex justify-between text-zinc-700">
+                      <span>{presentacion === "anillado" ? "Anillado" : "Encuadernado"}</span>
+                      <span className="font-semibold">+{fmt(extraPresentacion)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-amber-200 text-[#1a1a2e] font-black text-base">
+                    <span>Total del ítem</span>
+                    <span>{fmt(precioFinal)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <button type="button" onClick={agregarItem} disabled={!canAdd}
               className="w-full py-3 rounded-xl bg-[#1a1a2e] text-white font-black text-sm hover:bg-[#16213e] disabled:opacity-40 transition shadow-lg">
