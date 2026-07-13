@@ -132,18 +132,30 @@ export default async function DetallePedidoPage({
   if (!user) notFound();
   const admin = createAdminClient();
 
-  const { data: pedido } = await admin
+  const { data: pedido, error: pedidoError } = await admin
     .from("pedidos")
     .select(`
       *,
       clientes ( nombre, telefono, cod_pais, mail ),
       items_pedido ( * ),
       archivos_pedido ( * ),
-      usuarios_sistema ( nombre )
+      usuarios_sistema:usuario_id ( nombre )
     `)
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
+  if (pedidoError) {
+    console.error(`[pedidos/${id}] Error al cargar pedido:`, pedidoError);
+    return (
+      <div className="max-w-2xl mx-auto py-16 text-center space-y-4">
+        <div className="text-5xl">⚠️</div>
+        <h1 className="text-xl font-bold text-zinc-800">No pudimos cargar el pedido</h1>
+        <p className="text-sm text-zinc-500">Detalle técnico:</p>
+        <pre className="text-left bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-xs text-red-700 whitespace-pre-wrap">{pedidoError.message}{pedidoError.details ? `\n\n${pedidoError.details}` : ""}{pedidoError.hint ? `\n\nHint: ${pedidoError.hint}` : ""}</pre>
+        <Link href="/pedidos" className="inline-block text-sm text-[#f5a623] font-semibold underline underline-offset-2">← Volver a pedidos</Link>
+      </div>
+    );
+  }
   if (!pedido) notFound();
 
   const items = ((pedido as any).items_pedido as any[]) ?? [];
