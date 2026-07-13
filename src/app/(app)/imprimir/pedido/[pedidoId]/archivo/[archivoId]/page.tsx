@@ -31,7 +31,7 @@ export default async function ImprimirArchivoPage({
 
   if (!pedido || !archivo) notFound();
 
-  const pdfUrl = `/api/archivos/${(archivo as any).google_file_id}`;
+  const pdfUrl = `/api/archivos/${(archivo as any).id}`;
 
   return <PrintViewer pedido={pedido as any} archivo={archivo as any} pdfUrl={pdfUrl} />;
 }

@@ -2,15 +2,15 @@
 
 import { useState, useRef, useCallback } from "react";
 
-function uploadXHR(uploadUrl: string, file: File, onProgress: (pct: number) => void): Promise<{ id: string }> {
+function uploadXHR(uploadUrl: string, file: File, onProgress: (pct: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
     });
     xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
-      else reject(new Error(`${xhr.status}`));
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload HTTP ${xhr.status}: ${xhr.responseText.slice(0, 200)}`));
     });
     xhr.addEventListener("error", () => reject(new Error("Error de red")));
     xhr.open("PUT", uploadUrl);
@@ -22,7 +22,8 @@ function uploadXHR(uploadUrl: string, file: File, onProgress: (pct: number) => v
 type Archivo = {
   id: string;
   nombre_archivo: string;
-  google_file_id: string;
+  storage_path: string | null;
+  google_file_id: string | null;
   copias: number;
   color: boolean;
   doble_faz: boolean;
@@ -69,20 +70,28 @@ export default function ArchivosPanel({
       const initRes = await fetch("/api/archivos/init-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, pedidoId, mimeType: "application/pdf" }),
+        body: JSON.stringify({ fileName: file.name, pedidoId }),
       });
-      const { uploadUrl } = await initRes.json();
-      const driveData = await uploadXHR(uploadUrl, file, setUploadPct);
-      if (!driveData?.id) throw new Error("Sin fileId");
+      const initJson = await initRes.json();
+      if (!initRes.ok || !initJson.uploadUrl || !initJson.storagePath) {
+        throw new Error(initJson.error ?? "No se pudo iniciar el upload");
+      }
+      await uploadXHR(initJson.uploadUrl, file, setUploadPct);
       const regRes = await fetch("/api/archivos/registrar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pedidoId, fileName: file.name, googleFileId: driveData.id }),
+        body: JSON.stringify({
+          pedidoId,
+          fileName: file.name,
+          storagePath: initJson.storagePath,
+        }),
       });
       const json = await regRes.json();
       if (json.archivo) setArchivos((prev) => [...prev, json.archivo]);
+      else if (json.error) throw new Error(json.error);
     } catch (err) {
       console.error("[upload panel]", err);
+      alert(err instanceof Error ? err.message : "Error al subir el archivo");
     }
     setUploading(false);
     setUploadPct(0);
@@ -102,7 +111,7 @@ export default function ArchivosPanel({
 
   const imprimir = useCallback(async (archivo: Archivo) => {
     setPrinting(archivo.id);
-    const res = await fetch(`/api/archivos/${archivo.google_file_id}`);
+    const res = await fetch(`/api/archivos/${archivo.id}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const iframe = document.createElement("iframe");

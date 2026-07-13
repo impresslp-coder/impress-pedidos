@@ -53,7 +53,7 @@ export default function PedidoDetalleEditor({
   const [estadoPending, startEstadoTransition] = useTransition();
   const [msg, setMsg] = useState<string>();
   const [pendingAcceso, setPendingAcceso] = useState<
-    | { kind: "descargar"; nombre: string; googleFileId: string }
+    | { kind: "descargar"; nombre: string; archivoId: string }
     | { kind: "imprimir"; nombre: string; archivoId: string }
     | null
   >(null);
@@ -100,7 +100,7 @@ export default function PedidoDetalleEditor({
 
   const iniciarAccesoArchivo = (
     accion:
-      | { kind: "descargar"; nombre: string; googleFileId: string }
+      | { kind: "descargar"; nombre: string; archivoId: string }
       | { kind: "imprimir"; nombre: string; archivoId: string }
   ) => {
     if (pedidoEstado === "Encargo recibido") {
@@ -112,11 +112,11 @@ export default function PedidoDetalleEditor({
 
   const ejecutarAccion = (
     accion:
-      | { kind: "descargar"; nombre: string; googleFileId: string }
+      | { kind: "descargar"; nombre: string; archivoId: string }
       | { kind: "imprimir"; nombre: string; archivoId: string }
   ) => {
     if (accion.kind === "descargar") {
-      window.open(`/api/archivos/${accion.googleFileId}`, "_blank", "noopener,noreferrer");
+      window.open(`/api/archivos/${accion.archivoId}`, "_blank", "noopener,noreferrer");
     } else {
       abrirImpressPrint(accion.archivoId);
     }
@@ -202,7 +202,7 @@ export default function PedidoDetalleEditor({
                         onClick={() => iniciarAccesoArchivo({
                           kind: "descargar",
                           nombre: archivo.nombre_archivo,
-                          googleFileId: archivo.google_file_id,
+                          archivoId: archivo.id,
                         })}
                         className="font-semibold text-blue-700 hover:underline text-left"
                       >
