@@ -30,7 +30,7 @@ type Producto = {
 type Parametro = { id: string; nombre: string; precio: number; divisor: number; descuento_maximo: number | null };
 type PdfEntry = { id: number; file: File; paginas: number | null; contando: boolean };
 type Faz = "simple" | "doble";
-type Encuadernacion = "sin" | "anillado" | "encuadernado";
+type Presentacion = "suelto" | "abrochado" | "anillado" | "encuadernado";
 type PagPorHoja = 1 | 2 | 4;
 
 const fmt = (n: number) =>
@@ -417,9 +417,17 @@ export default function PedidoForm({
   const [savedPedido, setSavedPedido] = useState<{ pedidoId: string; numero: string; codigoUnico?: string; mode: "pedido" | "presupuesto" } | null>(null);
 
   const defaultFaz       = (config.default_faz            ?? "simple") as Faz;
-  const defaultEnc       = (config.default_encuadernacion ?? "sin")    as Encuadernacion;
   const defaultPPH       = parseInt(config.default_pag_por_hoja ?? "1") as PagPorHoja;
-  const defaultAbrochado = config.default_abrochado === "true";
+  const defaultPresentacion: Presentacion = (() => {
+    const nueva = config.default_presentacion;
+    if (nueva === "suelto" || nueva === "abrochado" || nueva === "anillado" || nueva === "encuadernado") return nueva;
+    const enc = config.default_encuadernacion;
+    if (enc === "anillado" || enc === "encuadernado") return enc;
+    if (config.default_abrochado === "true") return "abrochado";
+    return "suelto";
+  })();
+  const extraAnillado = parseFloat(config.pedidos_extra_anillado ?? "4250") || 0;
+  const extraEncuadernado = parseFloat(config.pedidos_extra_encuadernado ?? "0") || 0;
   const descuentosPredefinidos = (config.descuentos_predefinidos ?? "").split(",").map(Number).filter(Boolean);
 
   const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
@@ -439,9 +447,8 @@ export default function PedidoForm({
   const [prodSelId, setProdSelId] = useState("");
 
   const [faz, setFaz] = useState<Faz>(defaultFaz);
-  const [encuadernacion, setEncuadernacion] = useState<Encuadernacion>(defaultEnc);
+  const [presentacion, setPresentacion] = useState<Presentacion>(defaultPresentacion);
   const [pagPorHoja, setPagPorHoja] = useState<PagPorHoja>(defaultPPH);
-  const [abrochado, setAbrochado] = useState(defaultAbrochado);
 
   const getParamIdForFaz = (f: Faz) => {
     const div = f === "doble" ? 2 : 1;
@@ -467,7 +474,11 @@ export default function PedidoForm({
 
   const totalPaginas = pdfs.reduce((acc, p) => acc + (p.paginas ?? 0), 0);
   const precioBase   = calcPrecioPdf(totalPaginas);
-  const precioFinal  = precioBase > 0 ? precioBase * (1 - desc / 100) : 0;
+  const extraPresentacion =
+    presentacion === "anillado" ? extraAnillado :
+    presentacion === "encuadernado" ? extraEncuadernado : 0;
+  const precioConDesc = precioBase > 0 ? precioBase * (1 - desc / 100) : 0;
+  const precioFinal  = precioConDesc + (precioBase > 0 || totalPaginas > 0 ? extraPresentacion : 0);
   const todoContado  = pdfs.length > 0 && pdfs.every((p) => !p.contando && p.paginas !== null);
 
   const handleFaz = (v: Faz) => { setFaz(v); setParamId(getParamIdForFaz(v)); };
@@ -489,8 +500,9 @@ export default function PedidoForm({
   const buildModo = () => {
     const parts = [faz === "doble" ? "Doble faz" : "Simple faz"];
     if (pagPorHoja > 1) parts.push(`${pagPorHoja} p/hoja`);
-    if (encuadernacion !== "sin") parts.push(encuadernacion === "anillado" ? "Anillado" : "Encuadernado");
-    if (abrochado) parts.push("Abrochado");
+    if (presentacion === "abrochado") parts.push("Abrochado");
+    else if (presentacion === "anillado") parts.push("Anillado");
+    else if (presentacion === "encuadernado") parts.push("Encuadernado");
     return parts.join(" · ");
   };
 
@@ -499,8 +511,8 @@ export default function PedidoForm({
   const resetItem = () => {
     setProdQuery(""); setProdSelId(""); setPdfs([]);
     setDescuento("0"); setAnotacion("");
-    setFaz(defaultFaz); setEncuadernacion(defaultEnc);
-    setPagPorHoja(defaultPPH); setAbrochado(defaultAbrochado);
+    setFaz(defaultFaz); setPresentacion(defaultPresentacion);
+    setPagPorHoja(defaultPPH);
     setParamId(getParamIdForFaz(defaultFaz));
   };
 
@@ -911,17 +923,21 @@ export default function PedidoForm({
                     ))}
                   </div>
                 </div>
-                <div className="rounded-2xl border-2 border-violet-100 bg-violet-50/50 p-3">
-                  <p className="text-xs font-black text-violet-600 uppercase tracking-wide mb-2">Encuadernación</p>
+                <div className="col-span-2 rounded-2xl border-2 border-violet-100 bg-violet-50/50 p-3">
+                  <p className="text-xs font-black text-violet-600 uppercase tracking-wide mb-2">Presentación</p>
                   <div className="flex gap-2 flex-wrap">
-                    <OptBtn sel={encuadernacion === "sin"} onClick={() => { setEncuadernacion("sin"); setImprimirTapas(false); }} accent="violet"
-                      icon={<IcoSinEnc s={encuadernacion === "sin"} />} label="Sin" />
-                    <OptBtn sel={encuadernacion === "anillado"} onClick={() => { setEncuadernacion("anillado"); setImprimirTapas(false); }} accent="violet"
-                      icon={<IcoAnillado s={encuadernacion === "anillado"} />} label="Anillado" />
-                    <OptBtn sel={encuadernacion === "encuadernado"} onClick={() => setEncuadernacion("encuadernado")} accent="violet"
-                      icon={<IcoEncuadernado s={encuadernacion === "encuadernado"} />} label="Encuad." />
+                    <OptBtn sel={presentacion === "suelto"} onClick={() => { setPresentacion("suelto"); setImprimirTapas(false); }} accent="violet"
+                      icon={<IcoSinEnc s={presentacion === "suelto"} />} label="Suelto" />
+                    <OptBtn sel={presentacion === "abrochado"} onClick={() => { setPresentacion("abrochado"); setImprimirTapas(false); }} accent="violet"
+                      icon={<IcoAbrochado s={presentacion === "abrochado"} />} label="Abrochado" />
+                    <OptBtn sel={presentacion === "anillado"} onClick={() => { setPresentacion("anillado"); setImprimirTapas(false); }} accent="violet"
+                      icon={<IcoAnillado s={presentacion === "anillado"} />}
+                      label={extraAnillado > 0 ? `Anillado (+${fmt(extraAnillado)})` : "Anillado"} />
+                    <OptBtn sel={presentacion === "encuadernado"} onClick={() => setPresentacion("encuadernado")} accent="violet"
+                      icon={<IcoEncuadernado s={presentacion === "encuadernado"} />}
+                      label={extraEncuadernado > 0 ? `Encuadernado (+${fmt(extraEncuadernado)})` : "Encuadernado"} />
                   </div>
-                  {encuadernacion === "encuadernado" && (
+                  {presentacion === "encuadernado" && (
                     <button type="button" onClick={() => setImprimirTapas((v) => !v)}
                       className={`mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-bold transition ${
                         imprimirTapas
@@ -934,15 +950,6 @@ export default function PedidoForm({
                       Imprimir tapa y contratapa
                     </button>
                   )}
-                </div>
-                <div className="rounded-2xl border-2 border-emerald-100 bg-emerald-50/50 p-3">
-                  <p className="text-xs font-black text-emerald-600 uppercase tracking-wide mb-2">Abrochado</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <OptBtn sel={!abrochado} onClick={() => setAbrochado(false)} accent="emerald"
-                      icon={<IcoSinAbrochar s={!abrochado} />} label="Sin" />
-                    <OptBtn sel={abrochado} onClick={() => setAbrochado(true)} accent="emerald"
-                      icon={<IcoAbrochado s={abrochado} />} label="Abrochado" />
-                  </div>
                 </div>
               </div>
             </div>

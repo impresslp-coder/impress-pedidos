@@ -578,7 +578,7 @@ export default function PreciosManager({
           {/* Defaults tipo de impresión */}
           <div>
             <p className="text-sm font-semibold text-zinc-700 mb-3">Predeterminados de impresión</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs text-zinc-500 mb-1">Faz</label>
                 <select value={cfg.default_faz ?? "simple"}
@@ -599,23 +599,47 @@ export default function PreciosManager({
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Encuadernación</label>
-                <select value={cfg.default_encuadernacion ?? "sin"}
-                  onChange={(e) => setCfg((c) => ({ ...c, default_encuadernacion: e.target.value }))}
+                <label className="block text-xs text-zinc-500 mb-1">Presentación</label>
+                <select value={cfg.default_presentacion ?? "suelto"}
+                  onChange={(e) => setCfg((c) => ({ ...c, default_presentacion: e.target.value }))}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5a623]">
-                  <option value="sin">Sin encuadernar</option>
+                  <option value="suelto">Suelto</option>
+                  <option value="abrochado">Abrochado</option>
                   <option value="anillado">Anillado</option>
                   <option value="encuadernado">Encuadernado</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Extras de presentación en pedidos */}
+          <div>
+            <p className="text-sm font-semibold text-zinc-700 mb-1">Extras de presentación (Pedidos)</p>
+            <p className="text-xs text-zinc-400 mb-3">Monto fijo que se suma al ítem cuando el cliente elige esta presentación. Suelto y Abrochado no varían el precio.</p>
+            <div className="grid grid-cols-2 gap-4 max-w-md">
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Abrochado</label>
-                <select value={cfg.default_abrochado ?? "false"}
-                  onChange={(e) => setCfg((c) => ({ ...c, default_abrochado: e.target.value }))}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5a623]">
-                  <option value="false">Sin abrochar</option>
-                  <option value="true">Abrochado</option>
-                </select>
+                <label className="block text-xs text-zinc-500 mb-1">Anillado ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={cfg.pedidos_extra_anillado ?? "4250"}
+                  onChange={(e) => setCfg((c) => ({ ...c, pedidos_extra_anillado: e.target.value }))}
+                  suppressHydrationWarning
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5a623]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Encuadernado ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={cfg.pedidos_extra_encuadernado ?? "0"}
+                  onChange={(e) => setCfg((c) => ({ ...c, pedidos_extra_encuadernado: e.target.value }))}
+                  suppressHydrationWarning
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5a623]"
+                />
               </div>
             </div>
           </div>
