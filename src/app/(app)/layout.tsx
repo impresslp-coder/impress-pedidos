@@ -28,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/productos", label: "Productos" },
     { href: "/estadisticas", label: "Estadisticas" },
     ...(esAdmin ? [
-      { href: "/admin/cola", label: "Cola" },
+      { href: "/admin/cola", label: "Pendientes" },
       { href: "/admin/presentismo", label: "Presentismo" },
       { href: "/admin/impresoras", label: "Impresoras" },
       { href: "/admin/precios", label: "Precios" },

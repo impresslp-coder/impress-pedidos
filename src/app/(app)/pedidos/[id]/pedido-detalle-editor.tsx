@@ -52,6 +52,12 @@ export default function PedidoDetalleEditor({
   const [isPending, startTransition] = useTransition();
   const [estadoPending, startEstadoTransition] = useTransition();
   const [msg, setMsg] = useState<string>();
+  const [pendingAcceso, setPendingAcceso] = useState<
+    | { kind: "descargar"; nombre: string; googleFileId: string }
+    | { kind: "imprimir"; nombre: string; archivoId: string }
+    | null
+  >(null);
+  const [aplicandoCambio, setAplicandoCambio] = useState(false);
 
   const total = useMemo(
     () => items.reduce((acc, item) => acc + (Number(item.precio) || 0), 0),
@@ -77,6 +83,57 @@ export default function PedidoDetalleEditor({
         window.location.href = data.protocolUrl;
       })
       .catch((error) => setMsg(error.message));
+  };
+
+  const pasarAEnProceso = async () => {
+    const res = await fetch(`/api/pedidos/${pedido.id}/estado`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estado: "En proceso" }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) {
+      throw new Error(json.error ?? "No pude cambiar el estado del pedido");
+    }
+    setPedidoEstado("En proceso");
+  };
+
+  const iniciarAccesoArchivo = (
+    accion:
+      | { kind: "descargar"; nombre: string; googleFileId: string }
+      | { kind: "imprimir"; nombre: string; archivoId: string }
+  ) => {
+    if (pedidoEstado === "Encargo recibido") {
+      setPendingAcceso(accion);
+    } else {
+      ejecutarAccion(accion);
+    }
+  };
+
+  const ejecutarAccion = (
+    accion:
+      | { kind: "descargar"; nombre: string; googleFileId: string }
+      | { kind: "imprimir"; nombre: string; archivoId: string }
+  ) => {
+    if (accion.kind === "descargar") {
+      window.open(`/api/archivos/${accion.googleFileId}`, "_blank", "noopener,noreferrer");
+    } else {
+      abrirImpressPrint(accion.archivoId);
+    }
+  };
+
+  const confirmarAcceso = async () => {
+    if (!pendingAcceso) return;
+    setAplicandoCambio(true);
+    setMsg(undefined);
+    try {
+      await pasarAEnProceso();
+      ejecutarAccion(pendingAcceso);
+      setPendingAcceso(null);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Error al cambiar estado");
+    }
+    setAplicandoCambio(false);
   };
 
   const cambiarEstadoPedido = (nuevoEstado: string) => {
@@ -140,10 +197,17 @@ export default function PedidoDetalleEditor({
                 {archivosLista.map((archivo) => (
                   <tr key={archivo.id} className="align-middle">
                     <td className="py-3 pr-3">
-                      <a href={`/api/archivos/${archivo.google_file_id}`} target="_blank" rel="noopener noreferrer"
-                        className="font-semibold text-blue-700 hover:underline">
+                      <button
+                        type="button"
+                        onClick={() => iniciarAccesoArchivo({
+                          kind: "descargar",
+                          nombre: archivo.nombre_archivo,
+                          googleFileId: archivo.google_file_id,
+                        })}
+                        className="font-semibold text-blue-700 hover:underline text-left"
+                      >
                         {archivo.nombre_archivo}
-                      </a>
+                      </button>
                     </td>
                     <td className="py-3 px-3 text-zinc-600">
                       {archivo.copias ?? 1} cop. · {archivo.color ? "Color" : "B&N"} · {archivo.doble_faz ? "Doble faz" : "Simple"} · {archivo.tamano_papel ?? "A4"}
@@ -169,7 +233,11 @@ export default function PedidoDetalleEditor({
                     <td className="py-3 pl-3 text-right">
                       <button
                         type="button"
-                        onClick={() => abrirImpressPrint(archivo.id)}
+                        onClick={() => iniciarAccesoArchivo({
+                          kind: "imprimir",
+                          nombre: archivo.nombre_archivo,
+                          archivoId: archivo.id,
+                        })}
                         className="px-3 py-1.5 rounded-md bg-[#f5a623] text-[#1a1a2e] text-xs font-black hover:bg-amber-400 transition">
                         Imprimir
                       </button>
@@ -380,6 +448,46 @@ export default function PedidoDetalleEditor({
           opacity: 1;
         }
       `}</style>
+
+      {pendingAcceso && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !aplicandoCambio && setPendingAcceso(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-[440px] max-w-[95vw] space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="text-3xl">🖨️</div>
+              <div className="flex-1">
+                <h3 className="font-black text-zinc-800 text-lg leading-tight">
+                  Estás por {pendingAcceso.kind === "imprimir" ? "imprimir" : "descargar"} un archivo del pedido
+                </h3>
+                <p className="text-sm text-zinc-500 mt-1">
+                  <span className="font-semibold text-zinc-700">{pendingAcceso.nombre}</span>
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+              Este pedido está en <span className="font-bold">Encargo recibido</span>. Al continuar, pasa automáticamente a <span className="font-bold">En producción</span>.
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={confirmarAcceso}
+                disabled={aplicandoCambio}
+                className="flex-1 py-3 rounded-xl bg-[#f5a623] text-[#1a1a2e] font-black text-sm hover:bg-[#d4881a] disabled:opacity-50 transition"
+              >
+                {aplicandoCambio ? "Guardando..." : "✓ Continuar y pasar a producción"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingAcceso(null)}
+                disabled={aplicandoCambio}
+                className="px-4 py-3 rounded-xl bg-zinc-100 text-zinc-600 text-sm font-semibold hover:bg-zinc-200 disabled:opacity-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

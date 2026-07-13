@@ -32,10 +32,9 @@ export default async function ColaProduccionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-800">Cola de producción</h1>
+        <h1 className="text-2xl font-bold text-zinc-800">Pendientes</h1>
         <p className="text-sm text-zinc-500 mt-1">
-          Ordená manualmente los pedidos activos según prioridad de producción.
-          Los operarios ven esta lista en orden.
+          Tablero de producción. Los pedidos avanzan automáticamente cuando el operario descarga el archivo desde el detalle del pedido.
         </p>
       </div>
       <ColaProduccionClient pedidosIniciales={(pedidos as any[]) ?? []} />
