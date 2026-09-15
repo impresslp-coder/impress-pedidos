@@ -6,7 +6,7 @@ export default async function NuevoPedidoFormPage() {
 
   // El máximo de filas de la API de Supabase es 1.000, aun si se solicita un
   // rango mayor. Se cargan páginas para que la búsqueda del selector abarque
-  // todos los clientes activos, incluidos los que llegaron por migración.
+  // todos los clientes activos, incluidos los migrados desde el CSV.
   const cargarClientesActivos = async () => {
     const paginas = await Promise.all(
       Array.from({ length: 5 }, (_, pagina) =>
