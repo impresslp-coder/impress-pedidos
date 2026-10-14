@@ -27,4 +27,5 @@ Los nombres de categorías deben coincidir con categorías activas; las columnas
 - `npx tsc --noEmit --pretty false` y `npm run build` pasaron con las rutas nuevas.
 - La conexión de servidor con el proyecto Biblioteca y una subida/lectura/borrado mediante URL firmada se probaron contra el proyecto nuevo.
 - Sin sesión, el panel redirige a login y la API responde 403.
-- Falta probar el flujo visual completo con una sesión real de admin y desplegar ImpressOffice. El repositorio tiene numerosos cambios preexistentes sin confirmar; no incluirlos inadvertidamente en un commit o despliegue.
+- El commit `6d2d7d8` se desplegó como producción **sin promover el dominio principal** en `dpl_3acim6VgeAHrWuWnLkjDAagENa7C` (`https://impress-pedidos-m6sftj0o8-impressonline.vercel.app`). Login respondió 200; sin sesión, el panel redirige a login y la API responde 403. El dominio `impress-pedidos.vercel.app` sigue en el despliegue anterior.
+- Falta probar el flujo visual completo con una sesión real de admin antes de promover esa versión. El repositorio principal conserva numerosos cambios preexistentes sin confirmar; no incluirlos inadvertidamente en otro commit o despliegue.
