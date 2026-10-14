@@ -11,7 +11,7 @@ Las funciones de administración leen y escriben únicamente `bv_categories`, `b
 
 ## Carga e importación
 
-El navegador obtiene URLs firmadas de subida de corta duración, envía el PDF (máximo 50 MB) y una portada JPEG generada de la primera página directamente al Storage privado. El servidor descarga ambos archivos, comprueba su firma y tamaño, cuenta las páginas del PDF y recién entonces crea o actualiza el material. Reemplazar un archivo conserva su registro y contador de descargas; los archivos anteriores se retiran tras actualizarlo. No hay claves secretas en el cliente.
+El navegador obtiene URLs firmadas de subida de corta duración, envía el PDF (máximo 50 MB) y una portada JPEG generada de la primera página directamente al Storage privado. El servidor descarga ambos archivos, comprueba su firma y tamaño, cuenta las páginas con `pdf-lib` (compatible con Node en Vercel) y recién entonces crea o actualiza el material. Reemplazar un archivo conserva su registro y contador de descargas; los archivos anteriores se retiran tras actualizarlo. No hay claves secretas en el cliente.
 
 Para cargar por lote, primero crear las categorías necesarias, seleccionar un CSV y los PDF correspondientes. Encabezados:
 
@@ -27,5 +27,5 @@ Los nombres de categorías deben coincidir con categorías activas; las columnas
 - `npx tsc --noEmit --pretty false` y `npm run build` pasaron con las rutas nuevas.
 - La conexión de servidor con el proyecto Biblioteca y una subida/lectura/borrado mediante URL firmada se probaron contra el proyecto nuevo.
 - Sin sesión, el panel redirige a login y la API responde 403.
-- El commit `6d2d7d8` se desplegó como producción **sin promover el dominio principal** en `dpl_3acim6VgeAHrWuWnLkjDAagENa7C` (`https://impress-pedidos-m6sftj0o8-impressonline.vercel.app`). Login respondió 200; sin sesión, el panel redirige a login y la API responde 403. El dominio `impress-pedidos.vercel.app` sigue en el despliegue anterior.
-- Falta probar el flujo visual completo con una sesión real de admin antes de promover esa versión. El repositorio principal conserva numerosos cambios preexistentes sin confirmar; no incluirlos inadvertidamente en otro commit o despliegue.
+- El commit `6d2d7d8` se desplegó como producción **sin promover el dominio principal** en `dpl_3acim6VgeAHrWuWnLkjDAagENa7C`. Con sesión admin se comprobó la edición y publicación. La primera subida real llegó a Storage pero `finalize` devolvió 503: los logs mostraron `ReferenceError: DOMMatrix is not defined` al importar `pdfjs-dist` en Node. El commit `370aaaf` reemplaza únicamente el conteo servidor por `pdf-lib`; un PDF local de 136 páginas se leyó correctamente y la compilación pasó. El despliegue corregido está en `dpl_6sfoPZZDyrY9ALyRn7tANq9SrL73` (`https://impress-pedidos-51vrkz3l5-impressonline.vercel.app`).
+- La subida completa en ese despliegue corregido sigue pendiente de prueba manual con sesión admin; por eso el dominio `impress-pedidos.vercel.app` no se promovió. El repositorio principal conserva numerosos cambios preexistentes sin confirmar; no incluirlos inadvertidamente en otro commit o despliegue.
