@@ -1,0 +1,30 @@
+# Panel de Biblioteca Virtual
+
+La página `/admin/biblioteca` administra exclusivamente el proyecto Supabase `impress-biblioteca` (`eeeboruicdpeetepellf`). El acceso exige sesión activa de ImpressOffice y `usuarios_sistema.rol = admin`, `activo = true`, verificados en el servidor contra `web-impress`. Ningún navegador recibe la clave secreta de Biblioteca.
+
+## Configuración
+
+- `BIBLIOTECA_SUPABASE_URL`: URL del proyecto nuevo.
+- `BIBLIOTECA_SUPABASE_SECRET_KEY`: clave `sb_secret_` del proyecto nuevo, solo servidor. Está en `.env.local` ignorado por Git y como Secret de producción del proyecto Vercel `impress-pedidos`.
+
+Las funciones de administración leen y escriben únicamente `bv_categories`, `bv_library_items` y los buckets privados `biblioteca-pdf` y `biblioteca-portadas` del proyecto nuevo. El único acceso a `web-impress` es la comprobación del rol del empleado; no se modifican sus tablas ni políticas.
+
+## Carga e importación
+
+El navegador obtiene URLs firmadas de subida de corta duración, envía el PDF (máximo 50 MB) y una portada JPEG generada de la primera página directamente al Storage privado. El servidor descarga ambos archivos, comprueba su firma y tamaño, cuenta las páginas del PDF y recién entonces crea o actualiza el material. Reemplazar un archivo conserva su registro y contador de descargas; los archivos anteriores se retiran tras actualizarlo. No hay claves secretas en el cliente.
+
+Para cargar por lote, primero crear las categorías necesarias, seleccionar un CSV y los PDF correspondientes. Encabezados:
+
+```csv
+archivo,titulo,descripcion,nivel,institucion,carrera,materia,anio,estado
+apunte.pdf,Apunte de prueba,Resumen,Universitario,UNLP,Derecho,Introducción,2026,borrador
+```
+
+Los nombres de categorías deben coincidir con categorías activas; las columnas institución, carrera, materia y año pueden quedar vacías. `estado` acepta `publicado` o `borrador`. El nombre de archivo debe coincidir exactamente con uno de los PDF seleccionados. El panel procesa hasta tres archivos a la vez y muestra progreso y errores por archivo; no envía archivos grandes a través de la función de Vercel.
+
+## Verificación y pendientes
+
+- `npx tsc --noEmit --pretty false` y `npm run build` pasaron con las rutas nuevas.
+- La conexión de servidor con el proyecto Biblioteca y una subida/lectura/borrado mediante URL firmada se probaron contra el proyecto nuevo.
+- Sin sesión, el panel redirige a login y la API responde 403.
+- Falta probar el flujo visual completo con una sesión real de admin y desplegar ImpressOffice. El repositorio tiene numerosos cambios preexistentes sin confirmar; no incluirlos inadvertidamente en un commit o despliegue.
