@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
+import { PDFDocument } from "pdf-lib";
 import { createBibliotecaAdminClient, isBibliotecaAdmin, isOwnOrigin, cleanText, categorySlug, isUuid } from "@/lib/biblioteca-admin";
 
 export const dynamic = "force-dynamic";
@@ -62,12 +63,10 @@ async function inspectFiles(client: ReturnType<typeof createBibliotecaAdminClien
   if (cover.length < 4 || cover.length > MAX_COVER || cover[0] !== 0xff || cover[1] !== 0xd8 || cover[2] !== 0xff) {
     throw new ValidationError("La portada no es un JPEG válido");
   }
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   let pageCount: number;
   try {
-    const document = await pdfjs.getDocument({ data: pdf, useSystemFonts: false, disableFontFace: true }).promise;
-    pageCount = document.numPages;
-    await document.destroy();
+    const document = await PDFDocument.load(pdf);
+    pageCount = document.getPageCount();
   } catch { throw new ValidationError("El PDF no se pudo leer"); }
   if (!Number.isInteger(pageCount) || pageCount < 1) throw new ValidationError("PDF sin páginas");
   return { pageCount, sizeBytes: pdf.length };
