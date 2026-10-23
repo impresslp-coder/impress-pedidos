@@ -45,8 +45,19 @@ export async function POST(req: NextRequest) {
   const hojas = sourceType === "ticket" ? 0 : Math.max(0, Math.floor(numberOrDefault(body.sheetsEstimated, 0)));
   const duration = body.durationMs == null ? null : Math.max(0, Math.floor(numberOrDefault(body.durationMs, 0)));
   const completedAt = cleanText(body.completedAt) || new Date().toISOString();
+  const operadorId = cleanText(body.operadorId);
 
   const admin = createAdminClient();
+  if (operadorId) {
+    const { data: operador, error: operadorError } = await admin
+      .from("usuarios_sistema")
+      .select("id")
+      .eq("id", operadorId)
+      .eq("activo", true)
+      .maybeSingle();
+    if (operadorError) return NextResponse.json({ error: operadorError.message }, { status: 500 });
+    if (!operador) return NextResponse.json({ error: "El operador de impresión no está activo." }, { status: 400 });
+  }
   const { error } = await admin.from("pedido_print_events").insert({
     pedido_id: pedidoId,
     archivo_id: archivoId,
@@ -70,8 +81,27 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  if (sourceType === "ticket" && ticketType) {
+    const { data: ticket } = await admin
+      .from("tickets_pedido")
+      .select("id")
+      .eq("pedido_id", pedidoId)
+      .eq("tipo", ticketType)
+      .eq("impreso", false)
+      .order("generado_en", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ticket?.id) {
+      const { error: ticketError } = await admin
+        .from("tickets_pedido")
+        .update({ impreso: true, impreso_en: completedAt, impreso_por: operadorId } as any)
+        .eq("id", ticket.id);
+      if (ticketError) return NextResponse.json({ error: ticketError.message }, { status: 500 });
+    }
+  }
+
   if (sourceType === "ticket" && ticketType === "pedido") {
-    await admin.from("pedidos").update({ estado: "En proceso" }).eq("id", pedidoId);
+    await admin.from("pedidos").update({ estado: "En producción" }).eq("id", pedidoId);
   }
 
   return NextResponse.json({ ok: true });

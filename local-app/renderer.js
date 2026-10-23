@@ -63,6 +63,7 @@ let autoTicketBusy = false;
 let availablePrinters = [];
 let currentPdfOptions = null;
 let currentPdfPageCount = 0;
+let currentOperator = null;
 
 // Cola de PDFs pendientes de autorizacion: { id, name, pdfUrl, options, printedUrl }
 const pdfQueue = [];
@@ -301,6 +302,7 @@ function paperMatchesRequest(paper, requested) {
   if (name === req || name.includes(req) || req.includes(name)) return true;
   if (req.includes("a4") && name.includes("a4")) return true;
   if (req.includes("a3") && name.includes("a3")) return true;
+  if (req.includes("a5") && name.includes("a5")) return true;
   if ((req.includes("80") || req.includes("ticket")) && (name.includes("80") || name.includes("ticket") || name.includes("receipt"))) return true;
   return false;
 }
@@ -615,6 +617,7 @@ async function recordPrintEvent(payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...printEventAuthPayload(),
+      operadorId: currentOperator?.id || null,
       ...payload,
     }),
   });
@@ -689,6 +692,15 @@ async function verifyOperatorCode(code) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Codigo de usuario incorrecto");
   return data.operator;
+}
+
+async function ensureCurrentOperator() {
+  if (currentOperator?.id) return currentOperator;
+  const code = await requestOperatorCode();
+  if (!code) throw new Error("Impresión cancelada: falta código de usuario.");
+  currentOperator = await verifyOperatorCode(code);
+  setMessage(`Impresión autorizada por ${currentOperator?.nombre || "operador"}.`);
+  return currentOperator;
 }
 
 function updateQueuedOption(kind, id, field, value) {
@@ -1068,8 +1080,8 @@ async function executePrinterQueue(kind = "all") {
   }
 
   try {
-    const operator = await verifyOperatorCode(code);
-    setMessage(`Cola autorizada por ${operator?.nombre || "operador"}.`);
+    currentOperator = await verifyOperatorCode(code);
+    setMessage(`Cola autorizada por ${currentOperator?.nombre || "operador"}.`);
   } catch (error) {
     reportError("Codigo de usuario incorrecto", error);
     return;
@@ -1242,6 +1254,7 @@ async function loadTickets() {
 }
 
 async function printTicketDirect(ticket) {
+  await ensureCurrentOperator();
   const ticketOpts = cloneOptions(defaultTicketOptions());
   ticketPrintOptions.set(ticket.ticketKey, ticketOpts);
   const runOpts = printOptionsForRun(ticketOpts);

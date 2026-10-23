@@ -38,6 +38,11 @@ function firstDate(events: any[], predicate: (event: any) => boolean) {
   return dates[0] ?? null;
 }
 
+function codigoSucursal(value: string | null | undefined) {
+  const code = String(value ?? "").replace(/\D/g, "");
+  return ["41", "44", "60"].includes(code) ? code : null;
+}
+
 function PrintStatsPanel({ events, error }: { events: any[]; error?: string }) {
   const totalJobs = events.length;
   const pdfJobs = events.filter((event) => event.source_type === "pdf").length;
@@ -161,7 +166,7 @@ export default async function DetallePedidoPage({
   const items = ((pedido as any).items_pedido as any[]) ?? [];
   const archivos = ((pedido as any).archivos_pedido as any[]) ?? [];
   const usuario = (pedido as any).usuarios_sistema as any;
-  const [{ data: printEvents, error: printEventsError }, { data: reclamos }] = await Promise.all([
+  const [{ data: printEvents, error: printEventsError }, { data: reclamos }, { data: mensajes }, { data: plantillas }, { data: perfilActual }, { data: tickets }, { data: responsableProduccion }] = await Promise.all([
     admin
       .from("pedido_print_events")
       .select("*")
@@ -172,7 +177,53 @@ export default async function DetallePedidoPage({
       .select("id, numero_reclamo, texto, sucursal, estado, creado_en")
       .eq("pedido_numero", (pedido as any).numero ?? "")
       .order("creado_en", { ascending: false }),
+    admin
+      .from("mensajes_enviados")
+      .select("id, enviado_en, plantilla, usuarios_sistema:enviado_por(nombre)")
+      .eq("pedido_id", id)
+      .order("enviado_en", { ascending: false }),
+    admin
+      .from("plantillas_mensaje")
+      .select("codigo, cuerpo")
+      .eq("activo", true)
+      .order("orden"),
+    admin
+      .from("usuarios_sistema")
+      .select("rol, nombre")
+      .eq("id", user.id)
+      .maybeSingle(),
+    admin
+      .from("tickets_pedido")
+      .select("id, tipo, generado_en, generado_por, impreso, impreso_en, impreso_por, usuarios_sistema:generado_por(nombre), impresor:impreso_por(nombre)")
+      .eq("pedido_id", id)
+      .order("generado_en", { ascending: false })
+      .limit(12),
+    (pedido as any).produccion_por
+      ? admin.from("usuarios_sistema").select("nombre").eq("id", (pedido as any).produccion_por).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const retiroCodigo = codigoSucursal((pedido as any).sucursal_retiro);
+  const [{ data: sucursalRetiro }, { count: otrosPedidos }] = await Promise.all([
+    retiroCodigo
+      ? admin.from("sucursales_retiro").select("codigo, nombre, direccion, horario").eq("codigo", retiroCodigo).eq("activa", true).maybeSingle()
+      : Promise.resolve({ data: null }),
+    admin.from("pedidos").select("id", { count: "exact", head: true }).eq("cliente_id", (pedido as any).cliente_id).neq("id", id),
+  ]);
+  const mensajesTarjeta = ((mensajes as any[]) ?? []).map((mensaje) => ({
+    id: mensaje.id,
+    enviado_en: mensaje.enviado_en,
+    plantilla: mensaje.plantilla,
+    enviado_por_nombre: mensaje.usuarios_sistema?.nombre ?? null,
+  }));
+  const ticketsTarjeta = ((tickets as any[]) ?? []).map((ticket) => ({
+    id: ticket.id,
+    tipo: ticket.tipo,
+    generado_en: ticket.generado_en,
+    generado_por_nombre: ticket.usuarios_sistema?.nombre ?? null,
+    impreso: Boolean(ticket.impreso),
+    impreso_en: ticket.impreso_en,
+    impreso_por_nombre: ticket.impresor?.nombre ?? null,
+  }));
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -202,7 +253,7 @@ export default async function DetallePedidoPage({
               Ticket pedido
             </a>
           )}
-          {["Listo para retirar", "Entregado"].includes(String((pedido as any).estado ?? "")) && (
+          {["Listo para entregar", "Entregado"].includes(String((pedido as any).estado ?? "")) && (
             <a href={`/api/pdf/pedido/${id}?tipo=entrega`} target="_blank" rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition">
               Ticket entrega
@@ -223,7 +274,19 @@ export default async function DetallePedidoPage({
         </div>
       )}
       <PrintStatsPanel events={(printEvents as any[]) ?? []} error={printEventsError?.message} />
-      <PedidoDetalleEditor pedido={pedido as any} itemsIniciales={items} archivos={archivos} />
+      <PedidoDetalleEditor
+        pedido={pedido as any}
+        itemsIniciales={items}
+        archivos={archivos}
+        mensajesIniciales={mensajesTarjeta}
+        plantillas={(plantillas as any[]) ?? []}
+        sucursalRetiro={sucursalRetiro as any}
+        puedeGestionarPrioridad={(perfilActual as any)?.rol === "admin"}
+        otrosPedidos={otrosPedidos ?? 0}
+        responsableProduccion={(responsableProduccion as any)?.nombre ?? null}
+        ticketsIniciales={ticketsTarjeta}
+        usuarioActualNombre={(perfilActual as any)?.nombre ?? null}
+      />
       <ReclamosPanel
         pedidoNumero={(pedido as any).numero ?? ""}
         reclamosIniciales={(reclamos as any[]) ?? []}

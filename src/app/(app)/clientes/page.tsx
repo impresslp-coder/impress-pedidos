@@ -89,7 +89,7 @@ export default async function ClientesPage({
                   </td>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/pedidos?cliente=${encodeURIComponent(c.nombre)}`}
+                      href={`/pedidos?q=${encodeURIComponent(c.nombre)}`}
                       className="text-blue-600 hover:underline text-xs"
                     >
                       Ver pedidos

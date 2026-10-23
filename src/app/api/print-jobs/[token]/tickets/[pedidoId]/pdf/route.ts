@@ -16,6 +16,9 @@ export async function GET(
   const { token, pedidoId } = await params;
   const payload = verifyPrintToken(token);
   if (!payload) return NextResponse.json({ error: "Trabajo vencido o invalido" }, { status: 401 });
+  if (pedidoId !== payload.pedidoId) {
+    return NextResponse.json({ error: "Pedido fuera del trabajo autorizado" }, { status: 403 });
+  }
 
   const admin = createAdminClient();
   const { data: pedido } = await admin
@@ -26,7 +29,7 @@ export async function GET(
 
   if (!pedido) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
   const tipo = new URL(req.url).searchParams.get("tipo") === "entrega" ? "entrega" : "pedido";
-  if (tipo === "entrega" && !["Listo para retirar", "Entregado"].includes(String((pedido as any).estado ?? ""))) {
+  if (tipo === "entrega" && !["Listo para entregar", "Entregado"].includes(String((pedido as any).estado ?? ""))) {
     return NextResponse.json({ error: "El pedido todavia no esta listo para entregar" }, { status: 409 });
   }
 
@@ -53,11 +56,16 @@ export async function GET(
     ? React.createElement(TicketEntregaDoc, { pedido: ticketData })
     : React.createElement(TicketPedidoDoc, { pedido: ticketData });
 
-  const buffer = await renderToBuffer(doc);
+  const buffer = await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]);
+  const { error: registroError } = await admin
+    .from("tickets_pedido")
+    .insert({ pedido_id: pedidoId, tipo, generado_por: null } as any);
+  if (registroError) console.error("[print-ticket] No pude registrar la generación:", registroError.message);
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="ticket-${tipo}-${(pedido as any).numero}.pdf"`,
+      "Cache-Control": "private, no-store",
     },
   });
 }

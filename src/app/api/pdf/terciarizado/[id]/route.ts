@@ -44,7 +44,7 @@ export async function GET(
 
   try {
     const buffer = await renderToBuffer(
-      React.createElement(TicketTerciarizadoDoc, { encargo: data })
+      React.createElement(TicketTerciarizadoDoc, { encargo: data }) as Parameters<typeof renderToBuffer>[0]
     );
     return new NextResponse(buffer as unknown as BodyInit, {
       headers: {

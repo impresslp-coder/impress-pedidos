@@ -1,25 +1,54 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import VentasForm from "./ventas-form";
 
 export default async function VentasPage() {
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  let { data: productos, error: productosError } = await supabase
-    .from("productos")
-    .select("id, nombre, categoria, precio, descuento_maximo, foto_url, codigo_barras")
-    .eq("tipo", "producto")
-    .eq("activo", true)
-    .order("nombre");
+  // PostgREST limita cada respuesta a 1.000 filas. El catálogo supera ese
+  // límite, así que se leen todas las páginas antes de pasarlas al buscador.
+  const paginasProductos = await Promise.all(
+    Array.from({ length: 5 }, (_, pagina) =>
+      admin
+        .from("productos")
+        .select("id, nombre, categoria, precio, descuento_maximo, foto_url, codigo_barras, tipo, es_servicio, anillo_mm, anillos_cant")
+        .in("tipo", ["producto", "encargo"])
+        .eq("activo", true)
+        .order("nombre")
+        .range(pagina * 1000, pagina * 1000 + 999),
+    ),
+  );
+  const productosBase = paginasProductos.flatMap(({ data }) => data ?? []);
 
-  if (productosError) {
-    const fallback = await supabase
-      .from("productos")
-      .select("id, nombre, categoria, precio, descuento_maximo, foto_url")
-      .eq("tipo", "producto")
-      .eq("activo", true)
-      .order("nombre");
-    productos = fallback.data;
-  }
+  // En el POS, un apunte se cobra con su impresión más el anillado físico
+  // calculado. No consume stock: se produce al momento de la venta.
+  const { data: anillos } = await (admin as any)
+    .from("anillos")
+    .select("medida_mm, precio")
+    .eq("activo", true);
+  const precioAnillo = new Map<number, number>(
+    (anillos ?? []).map((a: any) => [Number(a.medida_mm), Number(a.precio ?? 0)]),
+  );
+  const { data: descuentoCatalogo } = await supabase
+    .from("configuracion")
+    .select("valor")
+    .eq("clave", "catalogo_descuento_registrado_pct")
+    .maybeSingle();
+  const descuentoCatalogoPct = Math.max(0, Math.min(100, Number(descuentoCatalogo?.valor ?? 0) || 0));
+  const productos = ((productosBase as any[]) ?? []).map((producto) => {
+    const esApunte = producto.tipo === "encargo" && !producto.es_servicio;
+    const extraAnillado = esApunte
+      ? (precioAnillo.get(Number(producto.anillo_mm)) ?? 0) * Number(producto.anillos_cant ?? 0)
+      : 0;
+    const precioLista = Number(producto.precio ?? 0) + extraAnillado;
+    return {
+      ...producto,
+      precio: esApunte ? Math.round(precioLista * (1 - descuentoCatalogoPct / 100)) : precioLista,
+      precio_lista: precioLista,
+      descuento_registrado_pct: esApunte ? descuentoCatalogoPct : 0,
+    };
+  });
 
   const { data: stockRows } = await supabase
     .from("stock")
@@ -30,11 +59,19 @@ export default async function VentasPage() {
     stockMap[(s as any).producto_id] = (s as any).cantidad ?? 0;
   }
 
-  const { data: ventasRecientes } = await supabase
+  const [{ data: ventasRecientes }, { data: clientes }, { data: presupuestosPendientes }] = await Promise.all([
+    supabase
     .from("ventas")
     .select("id, numero_venta, fecha, total, medio_pago, items_venta(producto_nombre, cantidad)")
     .order("creado_en", { ascending: false })
-    .limit(20);
+    .limit(20),
+    supabase.from("clientes").select("id, nombre").eq("activo", true).order("nombre"),
+    (supabase.from("presupuestos") as any)
+      .select("id, numero, total, fecha_vencimiento, cliente_id, clientes(nombre), items_presupuesto(producto_id, producto, precio, descuento, unidades)")
+      .eq("estado", "vigente")
+      .order("creado_en", { ascending: false })
+      .limit(30),
+  ]);
 
   const { data: itemsVendidos } = await supabase
     .from("items_venta")
@@ -53,20 +90,6 @@ export default async function VentasPage() {
     .slice(0, 20)
     .map(([id]) => id);
 
-  const { data: configRows } = await supabase
-    .from("configuracion")
-    .select("clave, valor")
-    .in("clave", [
-      "ventas_tipos_papel",
-      "ventas_extra_abrochado",
-      "ventas_extra_anillado",
-      "ventas_extra_encuadernado",
-      "ventas_presets_impresion",
-    ]);
-
-  const configVentas: Record<string, string> = {};
-  for (const row of configRows ?? []) configVentas[row.clave] = row.valor;
-
   const { data: sucursales } = await supabase
     .from("sucursales")
     .select("id, nombre")
@@ -79,8 +102,9 @@ export default async function VentasPage() {
         productos={(productos as any[]) ?? []}
         topIds={topIds}
         stockMap={stockMap}
-        config={configVentas}
         sucursales={(sucursales as any[]) ?? []}
+        clientes={(clientes as any[]) ?? []}
+        presupuestosPendientes={(presupuestosPendientes as any[]) ?? []}
       />
 
       <div>

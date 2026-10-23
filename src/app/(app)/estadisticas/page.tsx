@@ -59,21 +59,23 @@ export default async function EstadisticasPage({
   const { start, end } = dayRange(desde, hasta);
 
   const admin = createAdminClient();
-  let cajaQuery = await admin
+  const cajaQuery = await admin
     .from("caja_jornadas")
     .select("id, tipo, usuario_nombre, billetes, gastos, total, created_at")
     .gte("created_at", start)
     .lte("created_at", end)
     .order("created_at", { ascending: false });
 
-  if (cajaQuery.error?.message.includes("gastos")) {
-    cajaQuery = await admin
+  const cajaFallback = cajaQuery.error?.message.includes("gastos")
+    ? await admin
       .from("caja_jornadas")
       .select("id, tipo, usuario_nombre, billetes, total, created_at")
       .gte("created_at", start)
       .lte("created_at", end)
-      .order("created_at", { ascending: false });
-  }
+      .order("created_at", { ascending: false })
+    : null;
+  const cajaData = cajaFallback?.data ?? cajaQuery.data;
+  const cajaError = cajaFallback?.error ?? cajaQuery.error;
 
   const { data: ventasData } = await admin
     .from("ventas")
@@ -82,7 +84,7 @@ export default async function EstadisticasPage({
     .lte("fecha", end)
     .order("fecha", { ascending: false });
 
-  const registros = (cajaQuery.data ?? []) as Array<{
+  const registros = (cajaData ?? []) as Array<{
     id: string;
     tipo: "inicio" | "cierre" | "retiro" | "gasto";
     usuario_nombre: string | null;
@@ -165,11 +167,11 @@ export default async function EstadisticasPage({
         </div>
       </div>
 
-      {cajaQuery.error && (
+      {cajaError && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           <p className="font-black">Falta preparar la tabla de caja.</p>
           <p>Corré en Supabase el archivo: scripts/migracion-caja-estadisticas.sql</p>
-          <p className="mt-2 text-xs">{cajaQuery.error.message}</p>
+          <p className="mt-2 text-xs">{cajaError.message}</p>
         </div>
       )}
 
@@ -237,7 +239,7 @@ export default async function EstadisticasPage({
                   </tr>
                 );
               })}
-              {!registros.length && !cajaQuery.error && (
+              {!registros.length && !cajaError && (
                 <tr>
                   <td colSpan={14} className="px-5 py-10 text-center text-zinc-500">
                     Todavia no hay registros de caja en este rango.

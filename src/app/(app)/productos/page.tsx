@@ -12,13 +12,14 @@ export default async function ProductosPage() {
     : { data: null };
   const esAdmin = (perfil as any)?.rol === "admin";
 
-  let { data: productos, error: productosError } = await supabase
+  const { data: productosIniciales, error: productosError } = await supabase
     .from("productos")
     .select("id, nombre, categoria, codigo_barras, precio, precio_compra, descuento_maximo, foto_url, activo")
     .eq("tipo", "producto")
     .eq("activo", true)
     .order("nombre");
 
+  let productos = productosIniciales;
   if (productosError) {
     const fallback = await supabase
       .from("productos")
@@ -26,7 +27,11 @@ export default async function ProductosPage() {
       .eq("tipo", "producto")
       .eq("activo", true)
       .order("nombre");
-    productos = fallback.data;
+    productos = fallback.data?.map((producto) => ({
+      ...producto,
+      codigo_barras: null,
+      precio_compra: null,
+    })) ?? null;
   }
 
   const { data: stockRows } = await supabase

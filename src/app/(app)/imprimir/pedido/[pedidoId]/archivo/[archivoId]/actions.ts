@@ -7,7 +7,7 @@ export async function marcarArchivoImpreso(pedidoId: string, archivoId: string) 
   const supabase = await createClient();
   const { error } = await supabase
     .from("archivos_pedido")
-    .update({ impreso: true, estado: "En proceso" } as any)
+    .update({ impreso: true, estado: "En producción" } as any)
     .eq("id", archivoId)
     .eq("pedido_id", pedidoId);
 
@@ -15,7 +15,7 @@ export async function marcarArchivoImpreso(pedidoId: string, archivoId: string) 
 
   await supabase
     .from("pedidos")
-    .update({ estado: "En proceso" })
+    .update({ estado: "En producción" })
     .eq("id", pedidoId);
 
   revalidatePath(`/pedidos/${pedidoId}`);

@@ -7,8 +7,8 @@ async function checkAdmin() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const admin = createAdminClient();
-  const { data: perfil } = await admin.from("usuarios_sistema").select("rol").eq("id", user.id).single();
-  return perfil?.rol === "admin" ? admin : null;
+  const { data: perfil } = await admin.from("usuarios_sistema").select("rol, activo").eq("id", user.id).single();
+  return perfil?.activo === true && perfil.rol === "admin" ? admin : null;
 }
 
 export async function PATCH(req: NextRequest) {

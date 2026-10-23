@@ -28,7 +28,7 @@ export default async function CatalogoPage() {
     (stockRows ?? []).map((s: any) => [s.producto_id, s.cantidad])
   );
 
-  const esAdmin = (perfil?.data as any)?.rol === "admin" || (perfil as any)?.rol === "admin";
+  const esAdmin = perfil?.rol === "admin";
 
   return (
     <CatalogoView

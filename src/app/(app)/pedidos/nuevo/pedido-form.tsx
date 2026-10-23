@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useEffect, useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { crearPedido, type ItemPedidoInput } from "./actions";
 import { useUpload } from "../../upload-context";
+import { preferenciasDesdeItem } from "@/lib/archivo-prefs";
 
 async function contarPaginasPDF(file: File): Promise<number> {
   const buffer = await file.arrayBuffer();
@@ -23,15 +24,29 @@ async function contarPaginasPDF(file: File): Promise<number> {
 type Cliente = { id: string; nombre: string; telefono: string | null; cod_pais: string | null };
 type Producto = {
   id: string; nombre: string; paginas: number | null;
-  precio_d: number | null; precio_e: number | null;
-  precio_f: number | null; precio_g: number | null;
+  precio: number | null;
+  precio_sin_anillado?: number | null;
+  precio_anillo?: number | null;
+  precio_anillado?: number | null;
   categoria: string | null;
+  tipo?: string | null; es_servicio?: boolean | null;
 };
-type Parametro = { id: string; nombre: string; precio: number; divisor: number; descuento_maximo: number | null };
 type PdfEntry = { id: number; file: File; paginas: number | null; contando: boolean };
 type Faz = "simple" | "doble";
 type Presentacion = "suelto" | "abrochado" | "anillado" | "encuadernado";
 type PagPorHoja = 1 | 2 | 4;
+type PapelCodigo = "comun" | "fotografico" | "chambril";
+type Tamano = "A3" | "A4" | "A5";
+type CotizacionTrabajo = {
+  paginas: number; hojas: number; tipo_papel: PapelCodigo; tamano: Tamano;
+  precio_impresion: number; precio_anillado: number; precio_encuadernado: number; total: number;
+};
+
+const PAPELES: { codigo: PapelCodigo; nombre: string }[] = [
+  { codigo: "comun", nombre: "Común" },
+  { codigo: "fotografico", nombre: "Fotográfico" },
+  { codigo: "chambril", nombre: "Chambril" },
+];
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
@@ -225,8 +240,8 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
   codigoPersonal: string | null;
   onConfirm: (data: {
     sucursalProd: string; sucursalRetiro: string;
-    senia: number; medioPago: string; viaContacto: string;
-    prioridad: string; mensaje: string; codigoOperador: string;
+    esEnvio: boolean; senia: number; medioPago: string; viaContacto: string;
+    mensaje: string; codigoOperador: string;
   }) => void;
   onClose: () => void;
 }) {
@@ -237,14 +252,15 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
   const sucursalDefault = sucursalGuardada || sucursales[0]?.nombre || "";
   const [sucProd, setSucProd] = useState(sucursalDefault);
   const [sucRetiro, setSucRetiro] = useState(sucursalDefault);
+  const [esEnvio, setEsEnvio] = useState(false);
   const [senia, setSenia] = useState("");
   const [codigoOp, setCodigoOp] = useState("");
   const [errorSenia, setErrorSenia] = useState<string>();
   const [errorCodigo, setErrorCodigo] = useState<string>();
   const [medioPago, setMedioPago] = useState(MEDIOS_PAGO[0]);
   const [viaContacto, setViaContacto] = useState(VIAS_CONTACTO[0]);
-  const [prioridad, setPrioridad] = useState("normal");
   const [mensaje, setMensaje] = useState("");
+  const [errorEntrega, setErrorEntrega] = useState<string>();
   const telefono = clienteTelefono;
 
   const seniaReal = senia === "" ? 0 : (parseFloat(senia) || 0);
@@ -253,6 +269,7 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
   const handleConfirm = () => {
     setErrorSenia(undefined);
     setErrorCodigo(undefined);
+    setErrorEntrega(undefined);
     if (seniaReal <= 0) {
       setErrorSenia("Debés ingresar una seña mayor a $0");
       return;
@@ -267,8 +284,16 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
         return;
       }
     }
-    onConfirm({ sucursalProd: sucProd, sucursalRetiro: sucRetiro,
-      senia: seniaReal, medioPago, viaContacto, prioridad, mensaje, codigoOperador: codigoOp });
+    if (!sucProd.trim()) {
+      setErrorEntrega("Indicá la sucursal de producción");
+      return;
+    }
+    if (!esEnvio && !sucRetiro.trim()) {
+      setErrorEntrega("Elegí la sucursal de retiro o marcá envío a domicilio");
+      return;
+    }
+    onConfirm({ sucursalProd: sucProd, sucursalRetiro: esEnvio ? "" : sucRetiro, esEnvio,
+      senia: seniaReal, medioPago, viaContacto, mensaje, codigoOperador: codigoOp });
   };
 
   return (
@@ -295,16 +320,17 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
             )}
           </div>
           <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Dónde retira</label>
-            {sucursales.length > 0 ? (
-              <select value={sucRetiro} onChange={(e) => setSucRetiro(e.target.value)}
-                className="w-full rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623]">
+            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Entrega</label>
+            <div className="flex rounded-xl border-2 border-zinc-200 overflow-hidden text-xs font-bold">
+              <button type="button" onClick={() => setEsEnvio(false)} className={`flex-1 px-2 py-2 ${!esEnvio ? "bg-[#1a1a2e] text-white" : "bg-white text-zinc-500"}`}>Retiro</button>
+              <button type="button" onClick={() => setEsEnvio(true)} className={`flex-1 px-2 py-2 ${esEnvio ? "bg-[#1a1a2e] text-white" : "bg-white text-zinc-500"}`}>Envío</button>
+            </div>
+            {!esEnvio ? (sucursales.length > 0 ? (
+              <select value={sucRetiro} onChange={(e) => setSucRetiro(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623]">
                 {sucursales.map((s) => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
               </select>
-            ) : (
-              <input value={sucRetiro} onChange={(e) => setSucRetiro(e.target.value)} suppressHydrationWarning
-                placeholder="Nombre sucursal"
-                className="w-full rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623]" />
+            ) : <input value={sucRetiro} onChange={(e) => setSucRetiro(e.target.value)} placeholder="Nombre sucursal" className="mt-2 w-full rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623]" />) : (
+              <p className="mt-2 text-xs text-zinc-500">Se coordinará día y franja horaria por WhatsApp.</p>
             )}
           </div>
         </div>
@@ -356,19 +382,7 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
               {VIAS_CONTACTO.map((v) => <option key={v}>{v}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Prioridad</label>
-            <div className="flex gap-2">
-              {["normal", "urgente"].map((p) => (
-                <button key={p} type="button" onClick={() => setPrioridad(p)}
-                  className={`flex-1 py-2 rounded-xl border-2 text-xs font-bold transition capitalize ${
-                    prioridad === p
-                      ? p === "urgente" ? "border-red-500 bg-red-50 text-red-700" : "border-[#f5a623] bg-amber-50 text-[#1a1a2e]"
-                      : "border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300"
-                  }`}>{p}</button>
-              ))}
-            </div>
-          </div>
+          <p className="self-end pb-2 text-xs text-zinc-500">La prioridad se administra por ítem una vez creado el pedido.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -392,6 +406,7 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
         {errorCodigo && (
           <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorCodigo}</p>
         )}
+        {errorEntrega && <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorEntrega}</p>}
 
         <button type="button" onClick={handleConfirm}
           className="w-full py-3 rounded-xl bg-[#f5a623] text-[#1a1a2e] font-black text-sm hover:bg-[#d4881a] transition shadow-lg shadow-amber-500/20">
@@ -403,10 +418,12 @@ function SucursalModal({ sucursales, total, clienteTelefono, codigoPersonal, onC
 }
 
 export default function PedidoForm({
-  clientes: clientesIniciales, productos, parametros, config, sucursales, codigoPersonal,
+  clientes: clientesIniciales, productos, config, sucursales, codigoPersonal, precioEncuadernado, descuentoCatalogoPct,
 }: {
-  clientes: Cliente[]; productos: Producto[]; parametros: Parametro[];
+  clientes: Cliente[]; productos: Producto[];
   config: Record<string, string>; sucursales: Sucursal[]; codigoPersonal: string | null;
+  precioEncuadernado: number | null;
+  descuentoCatalogoPct: number;
 }) {
   const router = useRouter();
   const { startUploads } = useUpload();
@@ -426,9 +443,6 @@ export default function PedidoForm({
     if (config.default_abrochado === "true") return "abrochado";
     return "suelto";
   })();
-  const extraAnillado = parseFloat(config.pedidos_extra_anillado ?? "4250") || 0;
-  const extraEncuadernado = parseFloat(config.pedidos_extra_encuadernado ?? "0") || 0;
-  const precioHoja = parseFloat(config.pedidos_precio_hoja ?? "150") || 150;
   const descMaximoConfig = parseFloat(config.pedidos_desc_maximo ?? "100") || 100;
   const descuentosPredefinidos = (config.descuentos_predefinidos ?? "").split(",").map(Number).filter(Boolean);
 
@@ -451,8 +465,13 @@ export default function PedidoForm({
   const [faz, setFaz] = useState<Faz>(defaultFaz);
   const [presentacion, setPresentacion] = useState<Presentacion>(defaultPresentacion);
   const [pagPorHoja, setPagPorHoja] = useState<PagPorHoja>(defaultPPH);
+  const [papel, setPapel] = useState<PapelCodigo>("comun");
+  const [tamano, setTamano] = useState<Tamano>("A4");
+  const [cotizacionTrabajo, setCotizacionTrabajo] = useState<CotizacionTrabajo | null>(null);
+  const [cotizandoTrabajo, setCotizandoTrabajo] = useState(false);
 
   const [descuento, setDescuento] = useState("0");
+  const [cantidad, setCantidad] = useState("1");
   const [anotacion, setAnotacion] = useState("");
   const [imprimirTapas, setImprimirTapas] = useState(false);
   const [showDescModal, setShowDescModal] = useState(false);
@@ -462,23 +481,80 @@ export default function PedidoForm({
 
   const maxDesc = descMaximoConfig;
   const desc    = Math.min(parseFloat(descuento) || 0, maxDesc);
+  const prodSel = productos.find((p) => p.id === prodSelId);
+  const esApunteCatalogo = !!prodSel && prodSel.tipo === "encargo" && !prodSel.es_servicio;
 
   const paginasPorHojaEfectivas = pagPorHoja * (faz === "doble" ? 2 : 1);
   const calcHojas = (paginas: number) =>
     paginas > 0 ? Math.ceil(paginas / paginasPorHojaEfectivas) : 0;
-  const calcPrecioPdf = (paginas: number) => calcHojas(paginas) * precioHoja;
 
   const totalPaginas = pdfs.reduce((acc, p) => acc + (p.paginas ?? 0), 0);
   const totalHojas   = calcHojas(totalPaginas);
-  const precioBase   = totalHojas * precioHoja;
-  const extraPresentacion =
-    presentacion === "anillado" ? extraAnillado :
-    presentacion === "encuadernado" ? extraEncuadernado : 0;
-  const descuentoMonto = precioBase * (desc / 100);
-  const precioConDesc  = precioBase - descuentoMonto;
   const hayTrabajo   = totalPaginas > 0;
-  const precioFinal  = hayTrabajo ? precioConDesc + extraPresentacion : 0;
   const todoContado  = pdfs.length > 0 && pdfs.every((p) => !p.contando && p.paginas !== null);
+
+  useEffect(() => {
+    let vigente = true;
+    if (!hayTrabajo || !todoContado || esApunteCatalogo) {
+      setCotizacionTrabajo(null);
+      setCotizandoTrabajo(false);
+      return;
+    }
+
+    setCotizacionTrabajo(null);
+    setCotizandoTrabajo(true);
+    fetch("/api/precios/pedido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paginas: totalPaginas,
+        hojas: totalHojas,
+        tipo_papel: papel,
+        tamano,
+        anillado: presentacion === "anillado",
+        encuadernado: presentacion === "encuadernado",
+      }),
+    })
+      .then(async (response) => {
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error ?? "No se pudo cotizar el trabajo.");
+        return json as CotizacionTrabajo;
+      })
+      .then((data) => vigente && setCotizacionTrabajo(data))
+      .catch((err) => vigente && setError(err.message))
+      .finally(() => vigente && setCotizandoTrabajo(false));
+
+    return () => { vigente = false; };
+  }, [hayTrabajo, todoContado, esApunteCatalogo, totalPaginas, totalHojas, papel, tamano, presentacion]);
+
+  const precioBase = cotizacionTrabajo?.precio_impresion ?? 0;
+  const extraPresentacion = presentacion === "anillado"
+    ? (cotizacionTrabajo?.precio_anillado ?? 0)
+    : presentacion === "encuadernado"
+      ? (cotizacionTrabajo?.precio_encuadernado ?? 0)
+      : 0;
+  const precioCatalogoSinAnillo = prodSel?.precio_sin_anillado ?? prodSel?.precio ?? 0;
+  const precioCatalogoConAnillo = prodSel?.precio_anillado ?? precioCatalogoSinAnillo;
+  // Un apunte entra anillado por defecto. Suelto quita sólo el anillo;
+  // encuadernado conserva el anillado y agrega el acabado vigente.
+  const precioCatalogoAntesDescuentoRegistrado = presentacion === "suelto"
+    ? precioCatalogoSinAnillo
+    : presentacion === "encuadernado"
+      ? precioCatalogoConAnillo + (precioEncuadernado ?? 0)
+      : precioCatalogoConAnillo;
+  const precioCatalogoPresentacion = esApunteCatalogo
+    ? Math.round((precioCatalogoAntesDescuentoRegistrado - (presentacion === "encuadernado" ? (precioEncuadernado ?? 0) : 0)) * (1 - descuentoCatalogoPct / 100))
+      + (presentacion === "encuadernado" ? (precioEncuadernado ?? 0) : 0)
+    : precioCatalogoAntesDescuentoRegistrado;
+  const precioAntesDescuento = prodSel
+    ? precioCatalogoPresentacion / pagPorHoja
+    : cotizacionTrabajo?.total ?? 0;
+  const descuentoMonto = precioAntesDescuento * (desc / 100);
+  const precioFinal  = prodSel
+    ? Math.round(precioAntesDescuento * (1 - desc / 100))
+    : cotizacionTrabajo ? Math.round(precioAntesDescuento * (1 - desc / 100)) : 0;
+  const cantidadReal = Math.max(1, Math.floor(Number(cantidad) || 1));
+  const subtotalItem = precioFinal * cantidadReal;
 
   const handleFaz = (v: Faz) => { setFaz(v); };
 
@@ -499,32 +575,39 @@ export default function PedidoForm({
   const buildModo = () => {
     const parts = [faz === "doble" ? "Doble faz" : "Simple faz"];
     if (pagPorHoja > 1) parts.push(`${pagPorHoja} p/hoja`);
+    if (pdfs.length > 0) {
+      const nombrePapel = PAPELES.find((item) => item.codigo === papel)?.nombre ?? papel;
+      parts.push(`${nombrePapel} ${tamano}`);
+    }
     if (presentacion === "abrochado") parts.push("Abrochado");
     else if (presentacion === "anillado") parts.push("Anillado");
     else if (presentacion === "encuadernado") parts.push("Encuadernado");
     return parts.join(" · ");
   };
 
-  const prodSel = productos.find((p) => p.id === prodSelId);
-
   const resetItem = () => {
     setProdQuery(""); setProdSelId(""); setPdfs([]);
     setDescuento("0"); setAnotacion("");
+    setCantidad("1");
     setFaz(defaultFaz); setPresentacion(defaultPresentacion);
     setPagPorHoja(defaultPPH);
+    setPapel("comun"); setTamano("A4");
     setImprimirTapas(false);
   };
 
   const agregarItem = () => {
+    if (!prodSel && (!todoContado || !cotizacionTrabajo)) return;
     const nombre = prodSel?.nombre ?? (prodQuery || (pdfs[0]?.file.name.replace(/\.pdf$/i, "") ?? "Documento"));
     const item: ItemPedidoInput & { _key: number; _pdfs?: File[] } = {
       _key: nextKey,
       _pdfs: pdfs.map((p) => p.file),
       producto: nombre,
       anotacion: anotacion || undefined,
-      paginas: totalPaginas || undefined,
+      paginas: totalPaginas || prodSel?.paginas || undefined,
       modo: buildModo(),
-      precio: precioFinal,
+      cantidad: cantidadReal,
+      precio_unitario: precioFinal,
+      precio: subtotalItem,
       descuento: desc || undefined,
     };
     setItems((prev) => [...prev, item]);
@@ -559,8 +642,8 @@ export default function PedidoForm({
 
   const guardarPedido = (modalData: {
     sucursalProd: string; sucursalRetiro: string;
-    senia: number; medioPago: string; viaContacto: string;
-    prioridad: string; mensaje: string; codigoOperador: string;
+    esEnvio: boolean; senia: number; medioPago: string; viaContacto: string;
+    mensaje: string; codigoOperador: string;
   }) => {
     setShowSucursalModal(false);
     const fd = new FormData();
@@ -569,21 +652,21 @@ export default function PedidoForm({
     fd.set("senia",              String(modalData.senia));
     fd.set("medio_pago",         modalData.medioPago);
     fd.set("via_contacto",       modalData.viaContacto);
-    fd.set("prioridad",          modalData.prioridad);
     fd.set("mensaje",            modalData.mensaje);
     fd.set("telefono_contacto",  clienteTelefono);
     fd.set("quien_cargo_codigo", modalData.codigoOperador);
     fd.set("sucursal_produccion", modalData.sucursalProd);
     fd.set("sucursal_retiro",    modalData.sucursalRetiro);
+    fd.set("es_envio",           String(modalData.esEnvio));
     fd.set("imprimir_tapas",     String(imprimirTapas));
 
     startTransition(() => {
       crearPedido(fd).then(async (res) => {
         if (!res || res.error) { if (res?.error) setError(res.error); return; }
 
-        const allPdfs: { file: File; pedidoId: string }[] = [];
+        const allPdfs: { file: File; pedidoId: string; printPrefs: ReturnType<typeof preferenciasDesdeItem> }[] = [];
         for (const item of items) for (const pdf of item._pdfs ?? []) {
-          allPdfs.push({ file: pdf, pedidoId: res.pedidoId! });
+          allPdfs.push({ file: pdf, pedidoId: res.pedidoId!, printPrefs: preferenciasDesdeItem(item) });
         }
 
         // Navigate immediately — uploads continue in background via context
@@ -604,18 +687,18 @@ export default function PedidoForm({
     fd.set("senia",           "0");
     fd.set("medio_pago",      "");
     fd.set("via_contacto",    "");
-    fd.set("prioridad",       "normal");
     fd.set("mensaje",         "");
     fd.set("telefono_contacto", clienteTelefono);
     fd.set("quien_cargo_codigo", "");
     fd.set("sucursal_produccion", "");
     fd.set("sucursal_retiro", "");
+    fd.set("es_envio",        "false");
     startTransitionPresup(() => {
       crearPedido(fd).then(async (res) => {
         if (!res || res.error) { if (res?.error) setError(res.error); return; }
-        const allPdfs: { file: File; pedidoId: string }[] = [];
+        const allPdfs: { file: File; pedidoId: string; printPrefs: ReturnType<typeof preferenciasDesdeItem> }[] = [];
         for (const item of items) for (const pdf of item._pdfs ?? []) {
-          allPdfs.push({ file: pdf, pedidoId: res.pedidoId! });
+          allPdfs.push({ file: pdf, pedidoId: res.pedidoId!, printPrefs: preferenciasDesdeItem(item) });
         }
         if (allPdfs.length) startUploads(allPdfs);
         setSavedPedido({ pedidoId: res.pedidoId!, numero: res.numero ?? "", codigoUnico: res.codigoUnico, mode: "presupuesto" });
@@ -633,7 +716,7 @@ export default function PedidoForm({
     ? productos.filter((p) => p.nombre.toLowerCase().includes(prodQuery.toLowerCase()))
     : productos.slice(0, 15);
 
-  const canAdd = !!(prodQuery || pdfs.length > 0);
+  const canAdd = !!prodSel || (pdfs.length > 0 && todoContado && !!cotizacionTrabajo && !cotizandoTrabajo);
 
   // ── Success screen ──
   if (savedPedido) {
@@ -807,7 +890,7 @@ export default function PedidoForm({
                 {precioFinal > 0 ? (
                   <>
                     <p className="text-2xl font-black text-[#f5a623] leading-none">{fmt(precioFinal)}</p>
-                    {desc > 0 && <p className="text-xs text-zinc-400 line-through">{fmt(precioBase)}</p>}
+                    {desc > 0 && <p className="text-xs text-zinc-400 line-through">{fmt(precioAntesDescuento)}</p>}
                   </>
                 ) : (
                   <p className="text-xl font-black text-zinc-200 leading-none">—</p>
@@ -836,9 +919,10 @@ export default function PedidoForm({
                   <ul className="absolute z-20 w-full border border-zinc-200 rounded-xl mt-1 max-h-44 overflow-y-auto shadow-xl bg-white">
                     {prodsFiltrados.map((p) => (
                       <li key={p.id} className="px-3 py-2 text-sm hover:bg-amber-50 cursor-pointer border-b border-zinc-50 last:border-0"
-                        onClick={() => { setProdSelId(p.id); setProdQuery(p.nombre); }}>
+                        onClick={() => { setProdSelId(p.id); setProdQuery(p.nombre); if (p.tipo === "encargo" && !p.es_servicio) { setPresentacion("anillado"); setTamano("A4"); setImprimirTapas(false); } }}>
                         <span className="font-semibold text-zinc-800">{p.nombre}</span>
-                        {p.categoria && <span className="text-zinc-400 ml-2 text-xs">{p.categoria}</span>}
+                    {p.categoria && <span className="text-zinc-400 ml-2 text-xs">{p.categoria}</span>}
+                        {p.precio_anillado != null && <span className="text-[#f5a623] ml-2 text-xs font-bold">{fmt(p.precio_anillado * (p.tipo === "encargo" && !p.es_servicio ? (1 - descuentoCatalogoPct / 100) : 1))}</span>}
                       </li>
                     ))}
                   </ul>
@@ -861,8 +945,6 @@ export default function PedidoForm({
               <div className="space-y-1.5">
                 {pdfs.map((p) => {
                   const pHojas  = p.paginas ? calcHojas(p.paginas) : null;
-                  const pPrecio = p.paginas ? calcPrecioPdf(p.paginas) : null;
-                  const pFinal  = pPrecio ? pPrecio * (1 - desc / 100) : null;
                   return (
                     <div key={p.id} className="flex items-center gap-2 bg-gradient-to-r from-zinc-50 to-amber-50 rounded-xl px-3 py-2.5 text-xs border border-zinc-100">
                       <span className="text-base shrink-0">📄</span>
@@ -879,9 +961,6 @@ export default function PedidoForm({
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="text-zinc-400">{p.paginas} pág</span>
                           {pHojas !== null && <span className="text-zinc-500 font-medium">{pHojas} hojas</span>}
-                          {pFinal !== null && pFinal > 0 && (
-                            <span className="font-black text-[#f5a623] text-sm">{fmt(pFinal)}</span>
-                          )}
                         </div>
                       )}
                       <button type="button" onClick={() => setPdfs((prev) => prev.filter((x) => x.id !== p.id))}
@@ -895,7 +974,7 @@ export default function PedidoForm({
                     <span className="text-zinc-400">·</span>
                     <span className="text-zinc-600">{totalHojas} hojas</span>
                     <span className="text-zinc-400">·</span>
-                    <span className="text-[#f5a623] font-black">{fmt(precioFinal)}</span>
+                    <span className="text-[#f5a623] font-black">{cotizandoTrabajo ? "Calculando…" : fmt(precioFinal)}</span>
                   </div>
                 )}
               </div>
@@ -922,17 +1001,42 @@ export default function PedidoForm({
                     ))}
                   </div>
                 </div>
+                <div className="col-span-2 rounded-2xl border-2 border-emerald-100 bg-emerald-50/50 p-3">
+                  <p className="text-xs font-black text-emerald-700 uppercase tracking-wide mb-2">Papel y tamaño</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="grid gap-1 text-xs font-semibold text-zinc-600">
+                      Papel
+                      <select value={papel} onChange={(e) => setPapel(e.target.value as PapelCodigo)}
+                        className="rounded-xl border-2 border-zinc-200 bg-white px-3 py-2 text-sm font-normal focus:outline-none focus:border-emerald-500">
+                        {PAPELES.map((item) => <option key={item.codigo} value={item.codigo}>{item.nombre}</option>)}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-zinc-600">
+                      Tamaño
+                      <select value={tamano} onChange={(e) => {
+                        const siguiente = e.target.value as Tamano;
+                        setTamano(siguiente);
+                        if (siguiente !== "A4" && presentacion === "encuadernado") setPresentacion("suelto");
+                      }} className="rounded-xl border-2 border-zinc-200 bg-white px-3 py-2 text-sm font-normal focus:outline-none focus:border-emerald-500">
+                        <option value="A3">A3</option>
+                        <option value="A4">A4</option>
+                        <option value="A5">A5</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
                 <div className="col-span-2 rounded-2xl border-2 border-violet-100 bg-violet-50/50 p-3">
                   <p className="text-xs font-black text-violet-600 uppercase tracking-wide mb-2">Presentación</p>
                   <div className="flex gap-2 flex-wrap">
                     <OptBtn sel={presentacion === "suelto"} onClick={() => { setPresentacion("suelto"); setImprimirTapas(false); }} accent="violet"
                       icon={<IcoSinEnc s={presentacion === "suelto"} />} label="Suelto" />
-                    <OptBtn sel={presentacion === "abrochado"} onClick={() => { setPresentacion("abrochado"); setImprimirTapas(false); }} accent="violet"
-                      icon={<IcoAbrochado s={presentacion === "abrochado"} />} label="Abrochado" />
+                    {!esApunteCatalogo && <OptBtn sel={presentacion === "abrochado"} onClick={() => { setPresentacion("abrochado"); setImprimirTapas(false); }} accent="violet"
+                      icon={<IcoAbrochado s={presentacion === "abrochado"} />} label="Abrochado" />}
                     <OptBtn sel={presentacion === "anillado"} onClick={() => { setPresentacion("anillado"); setImprimirTapas(false); }} accent="violet"
                       icon={<IcoAnillado s={presentacion === "anillado"} />} label="Anillado" />
-                    <OptBtn sel={presentacion === "encuadernado"} onClick={() => setPresentacion("encuadernado")} accent="violet"
+                    {tamano === "A4" && <OptBtn sel={presentacion === "encuadernado"} onClick={() => setPresentacion("encuadernado")} accent="violet"
                       icon={<IcoEncuadernado s={presentacion === "encuadernado"} />} label="Encuadernado" />
+                    }
                   </div>
                   {presentacion === "encuadernado" && (
                     <button type="button" onClick={() => setImprimirTapas((v) => !v)}
@@ -958,12 +1062,21 @@ export default function PedidoForm({
                 className="w-full rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623] transition" />
             </div>
 
+            <div>
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1.5">Cantidad</label>
+              <input type="number" min="1" step="1" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+                suppressHydrationWarning className="w-32 rounded-xl border-2 border-zinc-200 px-3 py-2 text-sm font-bold focus:outline-none focus:border-[#f5a623] transition" />
+              <p className="mt-1 text-xs text-zinc-400">Precio unitario: {fmt(precioFinal)}</p>
+            </div>
+
             {hayTrabajo && todoContado && (
               <div className="rounded-2xl border-2 border-amber-100 bg-amber-50/40 p-4">
                 <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Desglose</p>
-                <div className="space-y-1.5 text-sm">
+                {cotizandoTrabajo || !cotizacionTrabajo ? (
+                  <p className="text-sm text-zinc-500">Calculando con el motor de precios vigente…</p>
+                ) : <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between text-zinc-700">
-                    <span>{totalHojas} {totalHojas === 1 ? "hoja" : "hojas"} × {fmt(precioHoja)}</span>
+                    <span>Impresión · {totalHojas} {totalHojas === 1 ? "hoja" : "hojas"} · {PAPELES.find((item) => item.codigo === papel)?.nombre} {tamano}</span>
                     <span className="font-semibold">{fmt(precioBase)}</span>
                   </div>
                   {desc > 0 && (
@@ -978,17 +1091,24 @@ export default function PedidoForm({
                       <span className="font-semibold">+{fmt(extraPresentacion)}</span>
                     </div>
                   )}
+                  {cantidadReal > 1 && <div className="flex justify-between text-zinc-700"><span>{cantidadReal} unidades × {fmt(precioFinal)}</span><span className="font-semibold">{fmt(subtotalItem)}</span></div>}
                   <div className="flex justify-between pt-2 border-t border-amber-200 text-[#1a1a2e] font-black text-base">
                     <span>Total del ítem</span>
-                    <span>{fmt(precioFinal)}</span>
+                    <span>{fmt(subtotalItem)}</span>
                   </div>
-                </div>
+                </div>}
               </div>
+            )}
+
+            {esApunteCatalogo && descuentoCatalogoPct > 0 && (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                Este apunte registrado incluye {descuentoCatalogoPct}% de descuento sobre su precio de catálogo.
+              </p>
             )}
 
             <button type="button" onClick={agregarItem} disabled={!canAdd}
               className="w-full py-3 rounded-xl bg-[#1a1a2e] text-white font-black text-sm hover:bg-[#16213e] disabled:opacity-40 transition shadow-lg">
-              + Agregar al pedido
+              {cotizandoTrabajo ? "Calculando…" : "+ Agregar al pedido"}
             </button>
           </div>
         </div>

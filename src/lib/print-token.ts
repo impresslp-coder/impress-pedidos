@@ -9,11 +9,10 @@ type PrintTokenPayload = {
 function getSecret() {
   const secret =
     process.env.PRINT_JOB_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!secret) {
-    throw new Error("Falta PRINT_JOB_SECRET o una clave del servidor para firmar trabajos de impresion");
+    throw new Error("Falta PRINT_JOB_SECRET o SUPABASE_SERVICE_ROLE_KEY para firmar trabajos de impresion");
   }
 
   return secret;

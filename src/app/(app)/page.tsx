@@ -3,17 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 
 const ESTADOS_ACTIVOS = [
   "Encargo recibido",
-  "En proceso",
-  "Listo para retirar",
+  "En producción",
+  "Listo para entregar",
 ];
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
   const [
-    { data: pedidosActivos },
-    { data: pedidosHoy },
-    { data: presupuestosPendientes },
+    { count: pedidosActivos },
+    { count: pedidosHoy },
+    { count: presupuestosPendientes },
     { data: ultimosPedidos },
   ] = await Promise.all([
     supabase
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
 
   const acciones = [
     { href: "/pedidos/nuevo", label: "➕ Nuevo pedido", color: "bg-[#f5a623] text-[#1a1a2e]" },
-    { href: "/ventas", label: "🛒 Venta de útiles", color: "bg-emerald-600 text-white" },
+    { href: "/ventas", label: "🛒 Ventas y presupuestos", color: "bg-emerald-600 text-white" },
   ];
 
   return (
@@ -160,8 +160,8 @@ function EstadoBadge({ estado }: { estado: string | null }) {
   const colores: Record<string, string> = {
     "Presupuesto": "bg-blue-100 text-blue-700",
     "Encargo recibido": "bg-indigo-100 text-indigo-700",
-    "En proceso": "bg-amber-100 text-amber-700",
-    "Listo para retirar": "bg-emerald-100 text-emerald-700",
+    "En producción": "bg-amber-100 text-amber-700",
+    "Listo para entregar": "bg-emerald-100 text-emerald-700",
     "Entregado": "bg-zinc-100 text-zinc-500",
     "Cancelado": "bg-red-100 text-red-600",
   };

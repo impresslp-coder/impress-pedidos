@@ -5,8 +5,8 @@ import { actualizarEstado } from "./actions";
 
 const COLORES: Record<string, string> = {
   "Encargo recibido": "bg-blue-100 text-blue-700 border-blue-300",
-  "En proceso": "bg-amber-100 text-amber-700 border-amber-300",
-  "Listo para retirar": "bg-emerald-100 text-emerald-700 border-emerald-300",
+  "En producción": "bg-amber-100 text-amber-700 border-amber-300",
+  "Listo para entregar": "bg-emerald-100 text-emerald-700 border-emerald-300",
   "Entregado": "bg-zinc-100 text-zinc-600 border-zinc-300",
   "Cancelado": "bg-red-100 text-red-600 border-red-300",
 };

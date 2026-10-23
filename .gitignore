@@ -20,3 +20,9 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+.vercel
+
+# Backups locales de Supabase y estado de enlace de la CLI
+backup_pre_pedidos_*.sql
+backup_pre_produccion_*.sql
+supabase/.temp/

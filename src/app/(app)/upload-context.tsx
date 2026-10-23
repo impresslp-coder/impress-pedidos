@@ -20,6 +20,12 @@ type UploadSession = {
 type UploadEntry = {
   file: File;
   pedidoId: string;
+  printPrefs?: {
+    copias: number;
+    color: boolean;
+    doble_faz: boolean;
+    tamano_papel: string;
+  };
 };
 
 type UploadContextType = {
@@ -42,12 +48,19 @@ function fmtSize(b: number) {
 function uploadViaServer(
   file: File,
   pedidoId: string,
+  printPrefs: UploadEntry["printPrefs"],
   onProgress: (loaded: number, total: number, speed: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("pedido_id", pedidoId);
+    if (printPrefs) {
+      formData.append("copias", String(printPrefs.copias));
+      formData.append("color", String(printPrefs.color));
+      formData.append("doble_faz", String(printPrefs.doble_faz));
+      formData.append("tamano_papel", printPrefs.tamano_papel);
+    }
 
     const xhr = new XMLHttpRequest();
     let startTime = Date.now();
@@ -104,9 +117,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     setMinimized(false);
 
     for (let i = 0; i < entries.length; i++) {
-      const { file, pedidoId } = entries[i];
+      const { file, pedidoId, printPrefs } = entries[i];
       try {
-        await uploadViaServer(file, pedidoId, (loaded, total, speed) => {
+        await uploadViaServer(file, pedidoId, printPrefs, (loaded, total, speed) => {
           setSession((prev) =>
             prev ? { ...prev, files: prev.files.map((f, idx) =>
               idx === i ? { ...f, loaded, total, speed } : f

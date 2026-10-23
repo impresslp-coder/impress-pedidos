@@ -70,7 +70,7 @@ CREATE TABLE parametros_precio (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 ## 🚀 Arrancar en local
 
 ```cmd
-cd C:\dev\impress-pedidos
+cd C:\Users\Nicolas\Desktop\impress-pedidos
 npm run dev
 ```
 

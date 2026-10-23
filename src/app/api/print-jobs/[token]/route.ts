@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyPrintToken } from "@/lib/print-token";
+import { resolverPreferenciasArchivo } from "@/lib/archivo-prefs";
 
 export async function GET(
   req: NextRequest,
@@ -13,7 +14,7 @@ export async function GET(
   const admin = createAdminClient();
   const { data: pedido } = await admin
     .from("pedidos")
-    .select("id, numero, estado, clientes(nombre, telefono)")
+    .select("id, numero, estado, clientes(nombre, telefono), items_pedido(cantidad, producto, modo, anotacion)")
     .eq("id", payload.pedidoId)
     .single();
 
@@ -28,11 +29,16 @@ export async function GET(
     return NextResponse.json({ error: "Trabajo no encontrado" }, { status: 404 });
   }
 
+  const { items_pedido: items, ...pedidoSeguro } = pedido as any;
+  const archivoConPreferencias = {
+    ...archivo,
+    ...resolverPreferenciasArchivo(archivo, items),
+  };
   const base = req.nextUrl.origin;
   return NextResponse.json({
-    pedido,
-    archivo,
+    pedido: pedidoSeguro,
+    archivo: archivoConPreferencias,
     pdfUrl: `${base}/api/print-jobs/${encodeURIComponent(token)}/pdf`,
     printedUrl: `${base}/api/print-jobs/${encodeURIComponent(token)}/printed`,
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

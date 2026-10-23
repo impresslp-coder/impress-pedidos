@@ -6,7 +6,7 @@ import { downloadPDF } from "@/lib/google-drive";
 
 // El parámetro [fileId] puede ser:
 // - un UUID de archivos_pedido.id (formato nuevo, resuelto internamente a Storage o Drive)
-// - un google_file_id de Drive (formato legacy — se descarga directo de Drive)
+// - un google_file_id de Drive (formato legacy, solo si consta en archivos_pedido)
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
@@ -35,8 +35,17 @@ export async function GET(
     googleFileId = (archivo as any).google_file_id ?? null;
     nombre = (archivo as any).nombre_archivo ?? nombre;
   } else {
-    // Legacy: interpretar el parámetro como google_file_id
-    googleFileId = fileId;
+    // Legacy: nunca permitir descargar un ID arbitrario del Drive de Impress.
+    const admin = createAdminClient();
+    const { data: archivo, error } = await admin
+      .from("archivos_pedido")
+      .select("google_file_id, nombre_archivo")
+      .eq("google_file_id", fileId)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!archivo) return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
+    googleFileId = archivo.google_file_id;
+    nombre = archivo.nombre_archivo ?? nombre;
   }
 
   let buffer: Buffer;
@@ -58,7 +67,7 @@ export async function GET(
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="${encodeURIComponent(nombre)}"`,
-      "Cache-Control": "private, max-age=300",
+      "Cache-Control": "private, no-store",
     },
   });
 }

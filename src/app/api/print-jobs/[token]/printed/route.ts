@@ -24,7 +24,7 @@ export async function POST(
   const admin = createAdminClient();
   const { error } = await admin
     .from("archivos_pedido")
-    .update({ impreso: true, estado: "En proceso" } as any)
+    .update({ impreso: true, estado: "En producción" } as any)
     .eq("id", payload.archivoId)
     .eq("pedido_id", payload.pedidoId);
 
@@ -62,7 +62,7 @@ export async function POST(
 
   await admin
     .from("pedidos")
-    .update({ estado: "En proceso" })
+    .update({ estado: "En producción" })
     .eq("id", payload.pedidoId);
 
   return NextResponse.json({ ok: true });

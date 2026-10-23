@@ -20,7 +20,7 @@ const TIPOS: { key: TipoTicket; label: string; ancho: boolean }[] = [
 const ESTADO_COLOR: Record<string, string> = {
   "Pendiente":             "bg-yellow-100 text-yellow-800",
   "En producción":         "bg-blue-100 text-blue-800",
-  "Listo para retirar":    "bg-green-100 text-green-800",
+  "Listo para entregar":   "bg-green-100 text-green-800",
   "Entregado":             "bg-zinc-100 text-zinc-500",
   "Cancelado":             "bg-red-100 text-red-700",
 };

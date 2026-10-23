@@ -12,5 +12,10 @@ export default async function ImpresoraPage() {
     .order("created_at", { ascending: false })
     .limit(30);
 
-  return <ImpresoraVirtual pedidos={pedidos ?? []} />;
+  const pedidosParaImpresora = (pedidos ?? []).map((pedido) => ({
+    ...pedido,
+    estado: pedido.estado ?? "",
+  }));
+
+  return <ImpresoraVirtual pedidos={pedidosParaImpresora} />;
 }

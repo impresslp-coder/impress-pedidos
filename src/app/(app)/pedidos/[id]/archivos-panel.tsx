@@ -44,7 +44,7 @@ type Prefs = {
   rango_paginas: string;
 };
 
-const PAPELES = ["A4", "A3", "Letter", "Oficio"];
+const PAPELES = ["A3", "A4", "A5", "Letter", "Oficio"];
 
 export default function ArchivosPanel({
   pedidoId,

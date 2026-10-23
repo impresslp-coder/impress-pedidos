@@ -7,6 +7,7 @@ import { logout } from "@/app/login/actions";
 import { UploadProvider } from "./upload-context";
 import { CajaMenu } from "./caja-menu";
 import SucursalSelector from "./sucursal-selector";
+import { AlertasProduccion } from "./alertas-produccion";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -14,17 +15,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: perfil } = await admin
-    .from("usuarios_sistema")
-    .select("nombre, rol")
-    .eq("id", user.id)
-    .single();
+  const [{ data: perfil }, { data: alertas }] = await Promise.all([
+    admin
+      .from("usuarios_sistema")
+      .select("nombre, rol, activo")
+      .eq("id", user.id)
+      .single(),
+    admin
+      .from("notificaciones")
+      .select("id, titulo, detalle, creado_en, pedidos:pedido_id(id, numero)")
+      .eq("usuario_id", user.id)
+      .is("leida_en", null)
+      .order("creado_en", { ascending: false })
+      .limit(8),
+  ]);
+
+  if (perfil?.activo !== true) redirect("/login");
 
   const esAdmin = perfil?.rol === "admin";
 
   const navLinks = [
     { href: "/pedidos", label: "Pedidos" },
-    { href: "/ventas", label: "Ventas" },
+    { href: "/ventas", label: "Ventas y presupuestos" },
     { href: "/productos", label: "Productos" },
     { href: "/estadisticas", label: "Estadisticas" },
     ...(esAdmin ? [
@@ -33,6 +45,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       { href: "/admin/impresoras", label: "Impresoras" },
       { href: "/admin/precios", label: "Precios" },
       { href: "/admin/biblioteca", label: "Biblioteca" },
+      { href: "/admin/productos", label: "Mantenimiento" },
+      { href: "/admin/mensajes", label: "Mensajes" },
+      { href: "/admin/revision", label: "Revisión" },
       { href: "/admin/proveedores", label: "Proveedores" },
       { href: "/admin/usuarios", label: "Usuarios" },
     ] : []),
@@ -57,6 +72,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </nav>
             <div className="flex items-center gap-3 shrink-0">
               <SucursalSelector />
+              <AlertasProduccion alertas={((alertas as any[]) ?? []).map((alerta) => ({
+                id: alerta.id,
+                titulo: alerta.titulo,
+                detalle: alerta.detalle,
+                creado_en: alerta.creado_en,
+                pedido: Array.isArray(alerta.pedidos) ? alerta.pedidos[0] ?? null : alerta.pedidos ?? null,
+              }))} />
               <CajaMenu userName={perfil?.nombre || user.email || "Usuario"} />
               <form action={logout}>
                 <button type="submit"

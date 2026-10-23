@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       clientes ( nombre, telefono ),
       items_pedido ( precio )
     `)
-    .in("estado", ["Encargo recibido", "En proceso", "Listo para retirar"])
+    .in("estado", ["Encargo recibido", "En producción", "Listo para entregar"])
     .order("fecha", { ascending: false })
     .limit(100);
 
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Ticket de entrega si está listo
-    if (pedido.estado === "Listo para retirar") {
+    if (pedido.estado === "Listo para entregar") {
       rows.push({
         ticketKey: `entrega:${pedido.id}`,
         tipo: "entrega",

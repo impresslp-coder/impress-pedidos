@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { registrarVenta, type ItemVentaInput } from "./actions";
+import { useRouter } from "next/navigation";
+import CotizadorView, { type ItemDesdeCotizador } from "../cotizador/cotizador-view";
+import { guardarPresupuestoDesdeVenta, registrarVenta, type ItemVentaInput } from "./actions";
 
 type Producto = {
   id: string;
@@ -9,13 +11,34 @@ type Producto = {
   categoria?: string | null;
   codigo_barras?: string | null;
   precio?: number | null;
+  precio_lista?: number | null;
+  descuento_registrado_pct?: number | null;
   descuento_maximo?: number | null;
   foto_url?: string | null;
+  tipo?: string | null;
+  es_servicio?: boolean | null;
 };
 
 type Sucursal = {
   id: string;
   nombre: string;
+};
+
+type Cliente = { id: string; nombre: string };
+type PresupuestoPendiente = {
+  id: string;
+  numero: string;
+  total: number | null;
+  fecha_vencimiento: string | null;
+  cliente_id: string | null;
+  clientes: { nombre: string } | { nombre: string }[] | null;
+  items_presupuesto: {
+    producto_id: string | null;
+    producto: string;
+    precio: number | null;
+    descuento: number | null;
+    unidades: number | null;
+  }[] | null;
 };
 
 type CartItem = ItemVentaInput & {
@@ -24,11 +47,15 @@ type CartItem = ItemVentaInput & {
   stockeable: boolean;
 };
 
-type PapelTramo = { desde: number; hasta: number; precio: number };
-type Papel = { nombre: string; tramos: PapelTramo[] };
-type PresetImpresion = { nombre: string; hojas: number; papel: string; precioUnitario: number };
 type Faz = "simple" | "doble";
 type PagPorHoja = 1 | 2 | 4;
+type PapelCodigo = "comun" | "fotografico" | "chambril";
+type CotizacionImpresion = { hojas: number; papel: PapelCodigo; total: number };
+const PAPELES: { codigo: PapelCodigo; nombre: string }[] = [
+  { codigo: "comun", nombre: "Común" },
+  { codigo: "fotografico", nombre: "Fotográfico" },
+  { codigo: "chambril", nombre: "Chambril" },
+];
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
@@ -49,83 +76,6 @@ const calcSubtotal = (item: CartItem): number => {
   return Math.round(base * (1 - item.descuento_pct / 100));
 };
 
-const parsePapeles = (raw?: string): Papel[] => {
-  const source = raw ?? "Comun:1-10=80;11-50=60;51-9999=45,Opalina:1-10=140;11-50=120;51-9999=100,Fotografico:1-9999=180";
-  const byName = new Map<string, Papel>();
-  let currentName = "";
-
-  const addTramo = (nombre: string, tramoRaw: string) => {
-    const cleanName = nombre.trim();
-    const cleanTramo = tramoRaw.trim();
-    if (!cleanName || !cleanTramo) return;
-
-    const tramosRaw = cleanTramo.includes("=") ? cleanTramo.split(";") : [`1-999999=${cleanTramo}`];
-    const tramos = tramosRaw.map((tramo) => {
-      const [rango, precioRaw] = tramo.split("=");
-      const [desdeRaw, hastaRaw] = (rango ?? "").split("-");
-      return {
-        desde: parseInt(desdeRaw) || 1,
-        hasta: parseInt(hastaRaw) || 999999,
-        precio: parseFloat(precioRaw) || 0,
-      };
-    }).filter((t) => t.precio > 0);
-
-    if (!tramos.length) return;
-    const existing = byName.get(cleanName);
-    if (existing) {
-      existing.tramos.push(...tramos);
-    } else {
-      byName.set(cleanName, { nombre: cleanName, tramos });
-    }
-  };
-
-  for (const part of source.split(",")) {
-    const token = part.trim();
-    if (!token) continue;
-    const colon = token.indexOf(":");
-    if (colon >= 0) {
-      currentName = token.slice(0, colon).trim();
-      addTramo(currentName, token.slice(colon + 1));
-    } else if (currentName) {
-      addTramo(currentName, token);
-    }
-  }
-
-  const parsed = Array.from(byName.values()).map((papel) => ({
-    ...papel,
-    tramos: papel.tramos.sort((a, b) => a.desde - b.desde),
-  }));
-
-  return parsed.length ? parsed : [{ nombre: "Comun", tramos: [{ desde: 1, hasta: 999999, precio: 50 }] }];
-};
-
-const precioPapelPorHojas = (papel: Papel | undefined, hojas: number) => {
-  if (!papel) return 0;
-  const tramo = papel.tramos.find((t) => hojas >= t.desde && hojas <= t.hasta)
-    ?? papel.tramos[papel.tramos.length - 1];
-  return tramo?.precio ?? 0;
-};
-
-const parsePresets = (raw: string | undefined, papeles: Papel[]): PresetImpresion[] => {
-  const fallbackPapel = papeles[0]?.nombre ?? "Comun";
-  const fallbackPrecio = precioPapelPorHojas(papeles[0], 1);
-  const fallback = [{ nombre: "Documento", hojas: 1, papel: fallbackPapel, precioUnitario: fallbackPrecio }];
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return fallback;
-    const presets = parsed.map((item) => ({
-      nombre: String(item.nombre || "Documento"),
-      hojas: Math.max(1, Number(item.hojas) || 1),
-      papel: String(item.papel || fallbackPapel),
-      precioUnitario: Math.max(0, Number(item.precioUnitario) || 0),
-    })).filter((item) => item.nombre);
-    return presets.length ? presets : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
 const calcularHojasArchivo = (paginas: number, pagPorHoja: PagPorHoja, faz: Faz) => {
   if (paginas === 2 && pagPorHoja === 1) return 1;
   const caras = Math.ceil(paginas / pagPorHoja);
@@ -133,14 +83,16 @@ const calcularHojasArchivo = (paginas: number, pagPorHoja: PagPorHoja, faz: Faz)
 };
 
 export default function VentasForm({
-  productos, topIds, stockMap, config, sucursales,
+  productos, topIds, stockMap, sucursales, clientes, presupuestosPendientes,
 }: {
   productos: Producto[];
   topIds: string[];
   stockMap: Record<string, number>;
-  config: Record<string, string>;
   sucursales: Sucursal[];
+  clientes: Cliente[];
+  presupuestosPendientes: PresupuestoPendiente[];
 }) {
+  const router = useRouter();
   const [codigo, setCodigo] = useState("");
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
@@ -156,22 +108,30 @@ export default function VentasForm({
   const [isPending, startTransition] = useTransition();
   const [ventaOk, setVentaOk] = useState<string | null>(null);
   const [error, setError] = useState<string>();
+  const [modo, setModo] = useState<"venta" | "cotizar" | "presupuestos">("venta");
+  const [clienteId, setClienteId] = useState("");
+  const [presupuestoActivo, setPresupuestoActivo] = useState<{ id: string; numero: string } | null>(null);
+  const [presupuestoOk, setPresupuestoOk] = useState<string | null>(null);
   const codigoRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
-  const papeles = parsePapeles(config.ventas_tipos_papel);
-  const [papel, setPapel] = useState(papeles[0]?.nombre ?? "Comun");
+  const [papel, setPapel] = useState<PapelCodigo>("comun");
   const [faz, setFaz] = useState<Faz>("simple");
   const [pagPorHoja, setPagPorHoja] = useState<PagPorHoja>(1);
   const [copias, setCopias] = useState(1);
   const [pdfs, setPdfs] = useState<{ name: string; paginas: number }[]>([]);
   const [contando, setContando] = useState(false);
-  const presetsImpresion = parsePresets(config.ventas_presets_impresion, papeles);
   const [manualHojas, setManualHojas] = useState(1);
-  const [manualPapel, setManualPapel] = useState(papeles[0]?.nombre ?? "Comun");
-  const [manualPrecioUnitario, setManualPrecioUnitario] = useState(() => precioPapelPorHojas(papeles[0], 1));
+  const [manualPapel, setManualPapel] = useState<PapelCodigo>("comun");
+  const [cotizacionPdf, setCotizacionPdf] = useState<CotizacionImpresion | null>(null);
+  const [cotizacionManual, setCotizacionManual] = useState<CotizacionImpresion | null>(null);
+  const [cotizandoPdf, setCotizandoPdf] = useState(false);
+  const [cotizandoManual, setCotizandoManual] = useState(false);
 
   useEffect(() => { codigoRef.current?.focus(); }, []);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("modo") === "cotizar") setModo("cotizar");
+  }, []);
 
   const categorias = [...new Set(productos.map((p) => p.categoria).filter(Boolean))] as string[];
 
@@ -188,15 +148,18 @@ export default function VentasForm({
   }).slice(0, 40) : productosIniciales;
 
   const agregarProducto = (prod: Producto) => {
+    const stockeable = prod.tipo === "producto" && !prod.es_servicio;
     const stockDisp = stockLocal[prod.id] ?? 0;
-    if (stockDisp <= 0) {
+    if (stockeable && stockDisp <= 0) {
       setError("Producto sin stock");
       return;
     }
     const existe = items.find((i) => i.producto_id === prod.id);
     if (existe) {
       setItems((prev) => prev.map((i) =>
-        i.producto_id === prod.id ? { ...i, cantidad: Math.min(i.cantidad + 1, stockDisp) } : i
+        i.producto_id === prod.id
+          ? { ...i, cantidad: stockeable ? Math.min(i.cantidad + 1, stockDisp) : i.cantidad + 1 }
+          : i,
       ));
     } else {
       setItems((prev) => [
@@ -206,10 +169,10 @@ export default function VentasForm({
           producto_id: prod.id,
           producto_nombre: prod.nombre,
           precio_venta: prod.precio ?? 0,
-          cantidad: 1,
-          descuento_pct: 0,
-          descuento_max: prod.descuento_maximo ?? 0,
-          stockeable: true,
+        cantidad: 1,
+        descuento_pct: 0,
+        descuento_max: prod.descuento_maximo ?? 0,
+        stockeable,
         },
       ]);
       setNextKey((k) => k + 1);
@@ -245,25 +208,43 @@ export default function VentasForm({
     0,
   );
   const hojas = hojasPorCopia * copias;
-  const papelSel = papeles.find((p) => p.nombre === papel) ?? papeles[0];
-  const precioHoja = precioPapelPorHojas(papelSel, hojas);
-  const totalImpresion = Math.round(hojas * precioHoja);
-  const totalManual = Math.round(manualHojas * manualPrecioUnitario);
-
-  const aplicarPreset = (preset: PresetImpresion) => {
-    setManualHojas(preset.hojas);
-    setManualPapel(preset.papel);
-    setManualPrecioUnitario(preset.precioUnitario);
+  const cotizarImpresion = async (cantidadHojas: number, tipoPapel: PapelCodigo) => {
+    const response = await fetch("/api/precios/impresion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hojas: cantidadHojas, papel: tipoPapel }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error ?? "No se pudo cotizar la impresión.");
+    return json as CotizacionImpresion;
   };
+  useEffect(() => {
+    let vigente = true;
+    if (!hojas) { setCotizacionPdf(null); return; }
+    setCotizacionPdf(null);
+    setCotizandoPdf(true);
+    cotizarImpresion(hojas, papel).then((data) => vigente && setCotizacionPdf(data)).catch((e) => vigente && setError(e.message)).finally(() => vigente && setCotizandoPdf(false));
+    return () => { vigente = false; };
+  }, [hojas, papel]);
+  useEffect(() => {
+    let vigente = true;
+    setCotizacionManual(null);
+    setCotizandoManual(true);
+    cotizarImpresion(manualHojas, manualPapel).then((data) => vigente && setCotizacionManual(data)).catch((e) => vigente && setError(e.message)).finally(() => vigente && setCotizandoManual(false));
+    return () => { vigente = false; };
+  }, [manualHojas, manualPapel]);
+  const totalImpresion = cotizacionPdf?.total ?? 0;
+  const totalManual = cotizacionManual?.total ?? 0;
 
   const agregarManual = () => {
-    if (manualHojas <= 0 || totalManual <= 0) return;
+    if (manualHojas <= 0 || !cotizacionManual || totalManual <= 0) return;
+    const nombrePapel = PAPELES.find((item) => item.codigo === manualPapel)?.nombre ?? manualPapel;
     setItems((prev) => [
       ...prev,
       {
         _key: nextKey,
         producto_id: null,
-        producto_nombre: `Documento (${manualHojas} hojas - ${manualPapel})`,
+        producto_nombre: `Documento (${manualHojas} hojas - ${nombrePapel})`,
         precio_venta: totalManual,
         cantidad: 1,
         descuento_pct: 0,
@@ -289,14 +270,15 @@ export default function VentasForm({
   };
 
   const agregarImpresion = () => {
-    if (!totalPaginas || totalImpresion <= 0) return;
+    if (!totalPaginas || !cotizacionPdf || totalImpresion <= 0) return;
+    const nombrePapel = PAPELES.find((item) => item.codigo === papel)?.nombre ?? papel;
     const desc = [
       `${totalPaginas} pag`,
       `${copias} copia${copias > 1 ? "s" : ""}`,
       `${hojas} hojas`,
       faz === "doble" ? "doble faz" : "simple faz",
       `${pagPorHoja} p/hoja`,
-      papel,
+      nombrePapel,
     ].filter(Boolean).join(" - ");
     setItems((prev) => [
       ...prev,
@@ -318,6 +300,62 @@ export default function VentasForm({
 
   const total = items.reduce((acc, i) => acc + calcSubtotal(i), 0);
 
+  const agregarDesdeCotizador = (item: ItemDesdeCotizador) => {
+    setItems((prev) => [...prev, {
+      _key: nextKey, producto_id: null, producto_nombre: item.producto_nombre,
+      precio_venta: item.precio_venta, cantidad: 1, descuento_pct: 0,
+      descuento_max: 0, stockeable: false,
+    }]);
+    setNextKey((key) => key + 1);
+    setModo("venta");
+    setError(undefined);
+  };
+
+  const cargarPresupuesto = (presupuesto: PresupuestoPendiente) => {
+    const itemsCargados = (presupuesto.items_presupuesto ?? []).map((item, index) => {
+      const producto = item.producto_id ? productos.find((p) => p.id === item.producto_id) : undefined;
+      return {
+        _key: index,
+        producto_id: item.producto_id,
+        producto_nombre: item.producto,
+        precio_venta: Number(item.precio ?? 0),
+        cantidad: Math.max(1, Number(item.unidades ?? 1)),
+        descuento_pct: Number(item.descuento ?? 0),
+        descuento_max: Number(producto?.descuento_maximo ?? 0),
+        stockeable: producto?.tipo === "producto" && !producto.es_servicio,
+      };
+    });
+    if (!itemsCargados.length) { setError("Este presupuesto no tiene ítems para cobrar"); return; }
+    setItems(itemsCargados);
+    setNextKey(itemsCargados.length);
+    setClienteId(presupuesto.cliente_id ?? "");
+    setPresupuestoActivo({ id: presupuesto.id, numero: presupuesto.numero });
+    setPresupuestoOk(null);
+    setModo("venta");
+    setError(undefined);
+  };
+
+  const guardarPresupuesto = () => {
+    if (!items.length) { setError("Agregá productos al carrito"); return; }
+    if (!clienteId) { setError("Seleccioná un cliente para guardar el presupuesto"); return; }
+    const fd = new FormData();
+    fd.set("cliente_id", clienteId);
+    fd.set("items", JSON.stringify(items.map(({ _key, descuento_max, stockeable, ...rest }) => rest)));
+    setError(undefined);
+    startTransition(() => {
+      guardarPresupuestoDesdeVenta(fd).then((res) => {
+        if (res?.error) setError(res.error);
+        else if (res?.ok) {
+          setPresupuestoOk(res.numero);
+          setItems([]);
+          setClienteId("");
+          setPresupuestoActivo(null);
+          router.refresh();
+        }
+      });
+    });
+  };
+
   const handleVenta = () => {
     if (!items.length) { setError("Agrega productos al carrito"); return; }
     if (!codigoPersonal.trim()) { setError("Ingresa tu codigo de operador"); return; }
@@ -327,6 +365,7 @@ export default function VentasForm({
     fd.set("sucursal", sucursal);
     fd.set("codigo_personal", codigoPersonal);
     fd.set("items", JSON.stringify(items.map(({ _key, descuento_max, stockeable, ...rest }) => rest)));
+    if (presupuestoActivo) fd.set("presupuesto_id", presupuestoActivo.id);
     startTransition(() => {
       registrarVenta(fd).then((res) => {
         if (res?.error) {
@@ -342,6 +381,8 @@ export default function VentasForm({
           setVentaOk(res.numero!);
           setItems([]);
           setCodigoPersonal("");
+          setPresupuestoActivo(null);
+          setClienteId("");
         }
       });
     });
@@ -368,10 +409,10 @@ export default function VentasForm({
     <div className="space-y-5">
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(180px,240px)_1fr] gap-4 items-end">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Ventas</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">Punto de venta</p>
+          <h1 className="text-2xl font-bold text-zinc-800">Ventas y presupuestos</h1>
+          <p className="text-xs text-zinc-400 mt-0.5">{modo === "venta" ? "Punto de venta" : modo === "cotizar" ? "Cotización de impresión" : "Retomar presupuestos pendientes"}</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_210px_180px] gap-2">
+        {modo === "venta" && <div className="grid grid-cols-1 md:grid-cols-[220px_1fr_210px_180px] gap-2">
           <input
             ref={codigoRef}
             value={codigo}
@@ -401,11 +442,25 @@ export default function VentasForm({
               sucursales.map((s) => <option key={s.id} value={s.nombre}>{s.nombre}</option>)
             )}
           </select>
-        </div>
+        </div>}
+      </div>
+
+      <div className="flex flex-wrap gap-2 border-b border-zinc-200 pb-3">
+        {([
+          ["venta", "Cobrar ahora"],
+          ["cotizar", "Cotizar impresión"],
+          ["presupuestos", `Presupuestos pendientes (${presupuestosPendientes.length})`],
+        ] as const).map(([valor, etiqueta]) => (
+          <button key={valor} type="button" onClick={() => { setModo(valor); setError(undefined); }}
+            className={`rounded-md px-4 py-2 text-sm font-bold transition ${modo === valor ? "bg-[#1a1a2e] text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:border-[#f5a623]"}`}>
+            {etiqueta}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
       <div className="xl:col-span-3 space-y-4">
+        {modo === "venta" && <>
         <div className="bg-white rounded-md border border-zinc-200 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold text-zinc-800">Contador de PDFs</h2>
@@ -435,9 +490,9 @@ export default function VentasForm({
             </label>
             <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
               Tipo papel
-              <select value={papel} onChange={(e) => setPapel(e.target.value)}
+              <select value={papel} onChange={(e) => setPapel(e.target.value as PapelCodigo)}
                 className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900">
-                {papeles.map((p) => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+                {PAPELES.map((p) => <option key={p.codigo} value={p.codigo}>{p.nombre}</option>)}
               </select>
             </label>
             <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
@@ -463,11 +518,11 @@ export default function VentasForm({
                 <span className="text-zinc-400">/</span>
                 <span className="font-semibold text-zinc-700">{hojas} hojas total</span>
                 <span className="text-zinc-400">/</span>
-                <span className="font-semibold text-zinc-700">{fmt(precioHoja)} c/hoja</span>
-                <span className="ml-auto font-black text-[#f5a623]">{fmt(totalImpresion)}</span>
-                <button type="button" onClick={agregarImpresion}
-                  className="px-3 py-1.5 rounded-md bg-[#f5a623] text-[#1a1a2e] text-xs font-black">
-                  Agregar al carrito
+                <span className="font-semibold text-zinc-700">Motor de precios vigente</span>
+                <span className="ml-auto font-black text-[#f5a623]">{cotizandoPdf ? "Calculando…" : fmt(totalImpresion)}</span>
+                <button type="button" onClick={agregarImpresion} disabled={cotizandoPdf || !cotizacionPdf}
+                  className="px-3 py-1.5 rounded-md bg-[#f5a623] text-[#1a1a2e] text-xs font-black disabled:opacity-40">
+                  {cotizandoPdf ? "Calculando…" : "Agregar al carrito"}
                 </button>
               </div>
               <ul className="mt-2 text-xs text-zinc-500 space-y-1">
@@ -486,23 +541,13 @@ export default function VentasForm({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-zinc-800">Carga rapida de hojas</h2>
-              <p className="text-xs text-zinc-400 mt-0.5">Precio editable en vivo, sin abrir otra ventana.</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Calculado automáticamente según el tramo vigente.</p>
             </div>
-            <button type="button" onClick={agregarManual}
-              className="px-3 py-2 rounded-md bg-[#1a1a2e] text-white text-xs font-bold hover:bg-zinc-800">
-              Agregar
+            <button type="button" onClick={agregarManual} disabled={cotizandoManual || !cotizacionManual}
+              className="px-3 py-2 rounded-md bg-[#1a1a2e] text-white text-xs font-bold hover:bg-zinc-800 disabled:opacity-40">
+              {cotizandoManual ? "Calculando…" : "Agregar"}
             </button>
           </div>
-          {presetsImpresion.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {presetsImpresion.map((preset) => (
-                <button key={`${preset.nombre}-${preset.hojas}-${preset.papel}`} type="button" onClick={() => aplicarPreset(preset)}
-                  className="px-3 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-[#1a1a2e] text-xs font-black hover:bg-amber-100">
-                  {preset.nombre}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
               Canti de hojas
@@ -512,25 +557,20 @@ export default function VentasForm({
             </label>
             <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
               Tipo de papel
-              <select value={manualPapel}
-                onChange={(e) => {
-                  const nextPaper = e.target.value;
-                  setManualPapel(nextPaper);
-                  setManualPrecioUnitario(precioPapelPorHojas(papeles.find((p) => p.nombre === nextPaper), manualHojas));
-                }}
+              <select value={manualPapel} onChange={(e) => setManualPapel(e.target.value as PapelCodigo)}
                 className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900">
-                {papeles.map((p) => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+                {PAPELES.map((p) => <option key={p.codigo} value={p.codigo}>{p.nombre}</option>)}
               </select>
             </label>
             <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-              Precio c/hoja
-              <input type="number" min="0" step="0.01" value={manualPrecioUnitario}
-                onChange={(e) => setManualPrecioUnitario(Math.max(0, parseFloat(e.target.value) || 0))}
-                className="rounded-md border border-zinc-300 px-2 py-2 text-sm normal-case font-normal tracking-normal text-zinc-900" />
+              Tramo vigente
+              <div className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm normal-case font-semibold text-zinc-700">
+                {cotizandoManual ? "Calculando…" : `${manualHojas} hoja${manualHojas === 1 ? "" : "s"}`}
+              </div>
             </label>
             <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
               <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">Precio</p>
-              <p className="text-lg font-black text-[#f5a623]">{fmt(totalManual)}</p>
+              <p className="text-lg font-black text-[#f5a623]">{cotizandoManual ? "…" : fmt(totalManual)}</p>
             </div>
           </div>
         </div>
@@ -542,8 +582,9 @@ export default function VentasForm({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {filtrados.map((prod) => {
+              const stockeable = prod.tipo === "producto" && !prod.es_servicio;
               const stock = stockLocal[prod.id] ?? 0;
-              const sinStock = stock <= 0;
+              const sinStock = stockeable && stock <= 0;
               const enCarrito = items.find((i) => i.producto_id === prod.id);
               return (
                 <button
@@ -568,10 +609,16 @@ export default function VentasForm({
                       <span className="font-black text-[#f5a623] text-sm">
                         {prod.precio != null ? fmt(prod.precio) : "-"}
                       </span>
-                      <span className={`text-xs font-bold ${stock <= 3 && stock > 0 ? "text-amber-500" : sinStock ? "text-red-500" : "text-emerald-600"}`}>
-                        {sinStock ? "Sin stock" : `x${stock}`}
+                      <span className={`text-xs font-bold ${stockeable && stock <= 3 && stock > 0 ? "text-amber-500" : sinStock ? "text-red-500" : "text-emerald-600"}`}>
+                        {sinStock ? "Sin stock" : stockeable ? `x${stock}` : prod.es_servicio ? "Servicio" : "Apunte"}
                       </span>
                     </div>
+                    {(prod.descuento_registrado_pct ?? 0) > 0 && prod.precio_lista != null && (
+                      <p className="text-[10px] font-semibold text-emerald-700">
+                        <span className="mr-1 line-through text-zinc-400">{fmt(prod.precio_lista)}</span>
+                        {prod.descuento_registrado_pct}% registrado
+                      </p>
+                    )}
                     {prod.codigo_barras && <p className="text-[10px] text-zinc-400 font-mono">{prod.codigo_barras}</p>}
                   </div>
                   {enCarrito && (
@@ -583,6 +630,40 @@ export default function VentasForm({
               );
             })}
           </div>
+        )}
+        </>}
+
+        {modo === "cotizar" && (
+          <CotizadorView onAgregarAlCarrito={agregarDesdeCotizador} />
+        )}
+
+        {modo === "presupuestos" && (
+          <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
+            <div className="border-b border-zinc-100 p-5">
+              <h2 className="font-black text-zinc-800">Presupuestos pendientes</h2>
+              <p className="mt-1 text-sm text-zinc-500">Cargá uno en el carrito para cobrarlo sin volver a ingresar sus ítems.</p>
+            </div>
+            {presupuestosPendientes.length === 0 ? (
+              <p className="p-8 text-center text-sm text-zinc-400">No hay presupuestos vigentes.</p>
+            ) : (
+              <div className="divide-y divide-zinc-100">
+                {presupuestosPendientes.map((presupuesto) => {
+                  const cliente = Array.isArray(presupuesto.clientes) ? presupuesto.clientes[0] : presupuesto.clientes;
+                  return <div key={presupuesto.id} className="flex flex-wrap items-center gap-3 p-4">
+                    <div className="min-w-[150px] flex-1">
+                      <p className="font-mono text-sm font-black text-[#1a1a2e]">#{presupuesto.numero}</p>
+                      <p className="text-sm font-semibold text-zinc-700">{cliente?.nombre ?? "Cliente sin asignar"}</p>
+                      <p className="text-xs text-zinc-400">{(presupuesto.items_presupuesto ?? []).length} ítem(s) · vence {presupuesto.fecha_vencimiento ? new Date(`${presupuesto.fecha_vencimiento}T12:00:00`).toLocaleDateString("es-AR") : "sin vencimiento"}</p>
+                    </div>
+                    <p className="font-black text-[#f5a623]">{fmt(Number(presupuesto.total ?? 0))}</p>
+                    <button type="button" onClick={() => cargarPresupuesto(presupuesto)} className="rounded-md bg-[#1a1a2e] px-3 py-2 text-xs font-black text-white hover:bg-zinc-800">
+                      Cargar para cobrar
+                    </button>
+                  </div>;
+                })}
+              </div>
+            )}
+          </section>
         )}
       </div>
 
@@ -660,6 +741,21 @@ export default function VentasForm({
             </div>
           )}
 
+          {presupuestoActivo && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              Cobro vinculado al presupuesto <strong className="font-mono">#{presupuestoActivo.numero}</strong>.
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Cliente {presupuestoActivo ? "del presupuesto" : "(necesario para guardar presupuesto)"}</label>
+            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} disabled={!!presupuestoActivo}
+              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f5a623] disabled:bg-zinc-100">
+              <option value="">Sin asignar</option>
+              {clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nombre}</option>)}
+            </select>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Medio de pago</label>
             <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)}
@@ -683,13 +779,22 @@ export default function VentasForm({
             />
           </div>
           {error && <p className="text-xs text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>}
+          {presupuestoOk && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-md px-3 py-2">Presupuesto #{presupuestoOk} guardado. Ya podés atender al siguiente cliente.</p>}
+          {!presupuestoActivo && <button
+            type="button"
+            onClick={guardarPresupuesto}
+            disabled={isPending || !items.length || !clienteId}
+            className="w-full py-3 rounded-md border border-[#1a1a2e] text-[#1a1a2e] font-black text-sm hover:bg-zinc-100 disabled:opacity-40 transition"
+          >
+            {isPending ? "Guardando..." : "Guardar como presupuesto"}
+          </button>}
           <button
             type="button"
             onClick={handleVenta}
             disabled={isPending || !items.length}
             className="w-full py-3 rounded-md bg-[#f5a623] text-[#1a1a2e] font-black text-sm hover:bg-amber-400 disabled:opacity-40 transition"
           >
-            {isPending ? "Registrando..." : "Confirmar venta"}
+            {isPending ? "Registrando..." : presupuestoActivo ? `Cobrar presupuesto #${presupuestoActivo.numero}` : "Confirmar venta"}
           </button>
         </div>
       </div>

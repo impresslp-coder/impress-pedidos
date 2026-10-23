@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -30,20 +31,41 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const claveImpresora = request.nextUrl.searchParams.get("key");
+  const esPdfConClave = pathname.startsWith("/api/pdf/pedido/") &&
+    !!process.env.PRINT_QUEUE_KEY && claveImpresora === process.env.PRINT_QUEUE_KEY;
+  const esApiExterna =
+    pathname.startsWith("/api/print-jobs/") ||
+    ["/api/print-queue", "/api/print-operator", "/api/print-events"].includes(pathname) ||
+    pathname.startsWith("/api/cron/") ||
+    pathname.startsWith("/api/wc/") ||
+    esPdfConClave;
   const esRutaPublica =
     pathname === "/login" ||
-    pathname.startsWith("/auth") ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/");
+    esApiExterna;
 
-  if (!user && !esRutaPublica) {
+  let habilitado = false;
+  if (user) {
+    const { data: perfil, error } = await createAdminClient()
+      .from("usuarios_sistema")
+      .select("activo")
+      .eq("id", user.id)
+      .maybeSingle();
+    habilitado = !error && perfil?.activo === true;
+  }
+
+  if (!habilitado && !esRutaPublica) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Usuario no habilitado" }, { status: 403 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (user && pathname === "/login") {
+  if (habilitado && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

@@ -10,7 +10,9 @@ import {
   registrarQuejaPedido,
 } from "./actions";
 
-const ESTADOS = ["Todos", "Presupuesto", "Encargo recibido", "En proceso", "Listo para retirar", "Entregado", "Cancelado"];
+const ESTADOS = [
+  "Todos", "Presupuesto", "Encargo recibido", "En producción", "Listo para entregar", "Entregado", "Cancelado",
+];
 
 type ItemPedido = { producto: string | null; precio: number | null; paginas?: number | null; modo?: string | null };
 type Sucursal = { id: string; nombre: string };
@@ -99,7 +101,7 @@ export default function PedidosListClient({
     return visibles.filter((p) => {
       if (estado && estado !== "Todos" && p.estado !== estado) return false;
       if (!txt) return true;
-      return [p.numero, String(parseInt(p.numero, 10) || ""), p.codigo_unico ?? "", p.cliente, p.ubicacion ?? ""]
+      return [p.numero, String(parseInt(p.numero, 10) || ""), p.codigo_unico ?? "", p.cliente, p.sucursal ?? "", p.ubicacion ?? ""]
         .some((field) => normalize(field).includes(txt));
     });
   }, [visibles, q, estado]);
@@ -107,12 +109,12 @@ export default function PedidosListClient({
   useEffect(() => {
     const exact = rows.find((p) => !p.eliminado && matchesBarcode(p, q));
     if (!exact || exact.id === lastOpenedId || entrega?.id === exact.id) return;
-    if (exact.estado === "Listo para retirar") {
+    if (exact.estado === "Listo para entregar") {
       setEntrega(exact);
       setLastOpenedId(exact.id);
       setModalError(null);
     } else {
-      setModalError(`Pedido ${exact.numero}: estado actual "${exact.estado ?? "-"}". Solo se puede entregar si esta listo para retirar.`);
+      setModalError(`Pedido ${exact.numero}: estado actual "${exact.estado ?? "-"}". Solo se puede entregar si está listo para entregar.`);
       setLastOpenedId(exact.id);
     }
   }, [rows, q, lastOpenedId, entrega?.id]);
@@ -201,8 +203,8 @@ export default function PedidosListClient({
                     {p.telefono && <a href={`https://wa.me/${p.cod_pais ?? "54"}${p.telefono}`} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline">{p.telefono}</a>}
                   </td>
                   <td className="px-4 py-3"><EstadoBadge estado={p.estado} /></td>
-                  <td className="px-4 py-3 text-zinc-500">{p.sucursal || "-"}</td>
-                  <td className="px-4 py-3 text-zinc-600 max-w-[180px] truncate">{p.ubicacion || "-"}</td>
+                  <td className="px-4 py-3 text-zinc-500">{p.sucursal || "Sin sucursal informada"}</td>
+                  <td className="px-4 py-3 text-zinc-600 max-w-[180px] truncate">{p.ubicacion || <span className="text-amber-700">Sin ubicación informada</span>}</td>
                   <td className="px-4 py-3"><Link href={p.href} className="text-blue-600 hover:underline text-xs font-bold">Ver &rarr;</Link></td>
                   <td className="px-4 py-3">
                     {p.tipo === "pedido" && !p.eliminado && (
@@ -228,7 +230,7 @@ export default function PedidosListClient({
       {entrega && <EntregaModal pedido={entrega} onClose={() => setEntrega(null)} onDelivered={(id) => { patchRow(id, { estado: "Entregado", senia: entrega.total }); setEntrega(null); setQ(""); setLastOpenedId(null); }} />}
       {entregadosOpen && <EntregadosModal rows={rows.filter((r) => r.tipo === "pedido" && !r.eliminado && r.estado === "Entregado")} sucursales={sucursales} onClose={() => setEntregadosOpen(false)} />}
       {transferOpen && <TransferModal rows={rows.filter((r) => r.tipo === "pedido" && !r.eliminado)} sucursales={sucursales} onClose={() => setTransferOpen(false)} onSaved={(updates) => { updates.forEach((u) => patchRow(u.pedidoId, { sucursal: u.sucursal })); setTransferOpen(false); }} />}
-      {ubicacionOpen && <UbicacionModal rows={rows.filter((r) => r.tipo === "pedido" && !r.eliminado && r.estado === "Listo para retirar" && !r.ubicacion)} onClose={() => setUbicacionOpen(false)} onSaved={(updates) => { updates.forEach((u) => patchRow(u.pedidoId, { ubicacion: u.ubicacion })); setUbicacionOpen(false); }} />}
+      {ubicacionOpen && <UbicacionModal rows={rows.filter((r) => r.tipo === "pedido" && !r.eliminado && r.estado === "Listo para entregar" && !r.ubicacion)} onClose={() => setUbicacionOpen(false)} onSaved={(updates) => { updates.forEach((u) => patchRow(u.pedidoId, { ubicacion: u.ubicacion })); setUbicacionOpen(false); }} />}
       {deleteTarget && <DeleteModal pedido={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={(id) => { patchRow(id, { eliminado: true }); setDeleteTarget(null); }} />}
       {quejaTarget && <QuejaModal pedido={quejaTarget} onClose={() => setQuejaTarget(null)} onSaved={(id, motivo) => { patchRow(id, { prioridad: "queja", queja_motivo: motivo }); setQuejaTarget(null); }} />}
     </div>
@@ -495,7 +497,7 @@ function UbicacionModal({ rows, onClose, onSaved }: { rows: FilaUnificada[]; onC
   return (
     <ModalShell title="Establecer ubicacion" onClose={onClose} footer={<ModalButtons error={error} pending={isPending} onCancel={onClose} onConfirm={save} confirmText="Guardar ubicaciones" extra={<OperatorInput value={codigo} onChange={setCodigo} />} />}>
       <div className="space-y-2 max-h-96 overflow-y-auto">
-        {rows.length === 0 ? <p className="text-sm text-zinc-400">No hay pedidos listos para retirar sin ubicacion.</p> : rows.map((r) => (
+        {rows.length === 0 ? <p className="text-sm text-zinc-400">No hay pedidos listos para entregar sin ubicación.</p> : rows.map((r) => (
           <label key={r.id} className="grid grid-cols-[110px_1fr] gap-2 items-center">
             <span className="font-mono font-bold text-sm">{r.numero}</span>
             <input value={values[r.id] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [r.id]: e.target.value }))} placeholder="Texto libre de ubicacion" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
@@ -536,8 +538,8 @@ function PagoOptions() {
 function EstadoBadge({ estado }: { estado: string | null }) {
   const colores: Record<string, string> = {
     "Encargo recibido": "bg-blue-100 text-blue-700",
-    "En proceso": "bg-amber-100 text-amber-700",
-    "Listo para retirar": "bg-emerald-100 text-emerald-700",
+    "En producción": "bg-amber-100 text-amber-700",
+    "Listo para entregar": "bg-emerald-100 text-emerald-700",
     "Entregado": "bg-zinc-100 text-zinc-500",
     "Cancelado": "bg-red-100 text-red-600",
   };

@@ -13,6 +13,10 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const pedidoId = formData.get("pedido_id") as string | null;
+  const copias = Math.max(1, Math.floor(Number(formData.get("copias")) || 1));
+  const color = formData.get("color") === "true";
+  const dobleFaz = formData.get("doble_faz") === "true";
+  const tamanoPapel = String(formData.get("tamano_papel") || "A4");
 
   if (!file || !pedidoId) return NextResponse.json({ error: "Falta archivo o pedido_id" }, { status: 400 });
   if (file.type && file.type !== "application/pdf") return NextResponse.json({ error: "Solo PDFs" }, { status: 400 });
@@ -29,7 +33,16 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("archivos_pedido")
-    .insert({ pedido_id: pedidoId, nombre_archivo: file.name, storage_path: storagePath })
+    .insert({
+      pedido_id: pedidoId,
+      nombre_archivo: file.name,
+      storage_path: storagePath,
+      google_file_id: null,
+      copias,
+      color,
+      doble_faz: dobleFaz,
+      tamano_papel: tamanoPapel,
+    })
     .select("*")
     .single();
 

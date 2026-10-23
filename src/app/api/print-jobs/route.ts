@@ -23,6 +23,18 @@ export async function POST(req: NextRequest) {
 
   if (!archivo) return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
 
+  const { data: pedido, error: pedidoError } = await admin
+    .from("pedidos")
+    .select("mensaje,mercado_pago_payment_id")
+    .eq("id", pedidoId)
+    .single();
+  if (pedidoError || !pedido) {
+    return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
+  }
+  if (/^(Pedido|Compra) web/.test(String(pedido.mensaje ?? "")) && !pedido.mercado_pago_payment_id) {
+    return NextResponse.json({ error: "Este pedido web todavía espera el pago de Mercado Pago." }, { status: 409 });
+  }
+
   const token = createPrintToken(pedidoId, archivoId);
   const base = req.nextUrl.origin;
   const key = process.env.PRINT_QUEUE_KEY ?? "";

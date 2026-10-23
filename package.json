@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "set HTTP_PROXY=& set HTTPS_PROXY=& set ALL_PROXY=& set NODE_OPTIONS=--use-system-ca&& next dev --webpack",
-    "build": "set HTTP_PROXY=& set HTTPS_PROXY=& set ALL_PROXY=& set NODE_OPTIONS=--use-system-ca&& next build --webpack",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "print-app": "electron ./local-app",
     "pack-print-app": "electron-packager ./local-app \"IMPRESS Print\" --platform=win32 --arch=x64 --out=dist --overwrite",
     "install-print-app": "powershell -ExecutionPolicy Bypass -File .\\local-app\\install-impress-print.ps1",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:precios": "node scripts/verificar-motor-precios.mjs",
+    "test:catalogo": "node scripts/verificar-motor-precios.mjs --catalogo"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.0",

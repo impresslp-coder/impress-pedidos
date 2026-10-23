@@ -1,0 +1,14 @@
+.git
+.agents
+.claude
+.next
+.vercel
+node_modules
+**/node_modules
+dist
+release
+local-app
+*.log
+*.tsbuildinfo
+*.lnk
+MANUAL-IMPRESS-v2.docx

@@ -63,7 +63,7 @@ export async function entregarPedidoRapido(
     .single();
 
   if (pedidoError || !pedido) return { error: pedidoError?.message ?? "Pedido no encontrado" };
-  if ((pedido as any).estado !== "Listo para retirar") {
+  if ((pedido as any).estado !== "Listo para entregar") {
     return { error: "El pedido no esta listo para entregar" };
   }
 
@@ -205,7 +205,6 @@ export async function registrarQuejaPedido(pedidoId: string, motivo: string, cod
   const { error } = await admin
     .from("pedidos")
     .update({
-      prioridad: "queja",
       queja_motivo: cleanMotivo,
     } as any)
     .eq("id", pedidoId);

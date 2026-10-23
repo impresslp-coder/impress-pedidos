@@ -13,10 +13,10 @@ export default async function AdminUsuariosPage() {
   const admin = createAdminClient();
   const { data: perfil } = await admin
     .from("usuarios_sistema")
-    .select("rol")
+    .select("rol, activo")
     .eq("id", user.id)
     .single();
-  if (perfil?.rol !== "admin") redirect("/");
+  if (perfil?.activo !== true || perfil.rol !== "admin") redirect("/");
 
   const { data: usuarios } = await admin
     .from("usuarios_sistema")

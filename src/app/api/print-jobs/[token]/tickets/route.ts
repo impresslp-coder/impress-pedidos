@@ -14,16 +14,16 @@ export async function GET(
   const { data, error } = await admin
     .from("pedidos")
     .select("id, numero, fecha, estado, senia, sucursal_retiro, clientes(nombre, telefono), items_pedido(precio)")
-    .in("estado", ["Encargo recibido", "En proceso", "Listo para retirar"])
-    .order("fecha", { ascending: false })
-    .limit(50);
+    .eq("id", payload.pedidoId)
+    .in("estado", ["Encargo recibido", "En producción", "Listo para entregar"])
+    .limit(1);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const base = new URL(req.url).origin;
   const tickets = (data ?? []).map((pedido: any) => {
     const total = (pedido.items_pedido ?? []).reduce((acc: number, item: any) => acc + (Number(item.precio) || 0), 0);
-    const tipo = pedido.estado === "Listo para retirar" ? "entrega" : "pedido";
+    const tipo = pedido.estado === "Listo para entregar" ? "entrega" : "pedido";
     return {
       ticketKey: `${tipo}:${pedido.id}`,
       tipo,
@@ -41,5 +41,7 @@ export async function GET(
     };
   });
 
-  return NextResponse.json({ tickets });
+  return NextResponse.json({ tickets }, {
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }

@@ -17,7 +17,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const tipo = req.nextUrl.searchParams.get("tipo") ?? "resumen";
+  const tipoSolicitado = req.nextUrl.searchParams.get("tipo") ?? "resumen";
+  const tipo = ["resumen", "ticket", "entrega"].includes(tipoSolicitado) ? tipoSolicitado : "resumen";
 
   // Acepta autenticación por clave (IMPRESS Print standalone) o por cookie de sesión.
   const reqKey = req.nextUrl.searchParams.get("key");
@@ -26,6 +27,7 @@ export async function GET(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let pedido: any = null;
+  let generadoPor: string | null = null;
 
   if (useKeyAuth) {
     const admin = createAdminClient();
@@ -33,6 +35,8 @@ export async function GET(
     pedido = data;
   } else {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    generadoPor = user?.id ?? null;
     const { data } = await supabase.from("pedidos").select(PEDIDO_SELECT).eq("id", id).single();
     pedido = data;
   }
@@ -59,8 +63,8 @@ export async function GET(
     estado: pedido.estado ?? null,
   };
 
-  if (tipo === "entrega" && !["Listo para retirar", "Entregado"].includes(String(pedido.estado ?? ""))) {
-    return new NextResponse("El ticket de entrega se genera cuando el pedido esta listo para retirar.", { status: 409 });
+  if (tipo === "entrega" && !["Listo para entregar", "Entregado"].includes(String(pedido.estado ?? ""))) {
+    return new NextResponse("El ticket de entrega se genera cuando el pedido está listo para entregar.", { status: 409 });
   }
 
   const doc = tipo === "ticket"
@@ -76,7 +80,11 @@ export async function GET(
       : `resumen-${pedido.numero}.pdf`;
 
   try {
-    const buffer = await renderToBuffer(doc);
+    const buffer = await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]);
+    const { error: registroError } = await createAdminClient()
+      .from("tickets_pedido")
+      .insert({ pedido_id: id, tipo: tipo === "ticket" ? "pedido" : tipo, generado_por: generadoPor } as any);
+    if (registroError) console.error("[pdf] No pude registrar la generación:", registroError.message);
     return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",

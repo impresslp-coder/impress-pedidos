@@ -42,7 +42,7 @@ export async function GET(
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": "inline",
-      "Cache-Control": "private, max-age=300",
+      "Cache-Control": "private, no-store",
     },
   });
 }

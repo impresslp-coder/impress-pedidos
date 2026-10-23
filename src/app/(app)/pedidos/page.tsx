@@ -15,14 +15,14 @@ export default async function PedidosPage({
   let pedidos: any[] | null = null;
   const pedidosConOperacion = await supabase
     .from("pedidos")
-    .select(`id, numero, codigo_unico, fecha, estado, sucursal, ubicacion, senia, prioridad, eliminado, queja_motivo, mercado_pago_payment_id, mercado_pago_monto, mercado_pago_hora, clientes ( nombre, telefono, cod_pais ), items_pedido ( producto, paginas, modo, precio )`)
+    .select(`id, numero, codigo_unico, fecha, estado, sucursal, sucursal_produccion, sucursal_retiro, ubicacion, senia, prioridad, eliminado, queja_motivo, mercado_pago_payment_id, mercado_pago_monto, mercado_pago_hora, clientes ( nombre, telefono, cod_pais ), items_pedido ( producto, paginas, modo, precio )`)
     .order("creado_en", { ascending: false })
     .limit(200);
 
   if (pedidosConOperacion.error) {
     const fallback = await supabase
       .from("pedidos")
-      .select(`id, numero, codigo_unico, fecha, estado, sucursal, senia, prioridad, clientes ( nombre, telefono, cod_pais ), items_pedido ( producto, paginas, modo, precio )`)
+      .select(`id, numero, codigo_unico, fecha, estado, sucursal, sucursal_produccion, sucursal_retiro, ubicacion, senia, prioridad, clientes ( nombre, telefono, cod_pais ), items_pedido ( producto, paginas, modo, precio )`)
       .order("creado_en", { ascending: false })
       .limit(200);
     pedidos = (fallback.data as any[]) ?? [];
@@ -52,7 +52,7 @@ export default async function PedidosPage({
       codigo_unico: p.codigo_unico ?? null,
       fecha: p.fecha ?? null,
       estado: p.estado ?? null,
-      sucursal: p.sucursal ?? null,
+      sucursal: p.sucursal ?? p.sucursal_retiro ?? p.sucursal_produccion ?? null,
       ubicacion: p.ubicacion ?? null,
       cliente: p.clientes?.nombre ?? "-",
       telefono: p.clientes?.telefono ?? null,
