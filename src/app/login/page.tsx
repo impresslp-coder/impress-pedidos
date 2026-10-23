@@ -8,7 +8,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Image src="/impress-logo.png" alt="IMPRESS" width={260} height={180} className="mx-auto h-32 w-auto object-contain" priority />
-          <p className="text-zinc-300 text-sm mt-2 font-bold">Gestion de pedidos</p>
+          <p className="text-zinc-300 text-sm mt-2 font-bold">Impress Office</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-2xl p-8 border-t-4 border-[#fff200]">
