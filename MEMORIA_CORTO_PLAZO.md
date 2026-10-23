@@ -30,6 +30,17 @@
   - verificación GET y POST firmado del webhook local respondieron HTTP 200;
   - servidor local activo en `http://localhost:3000`;
   - falta ejecutar la migración del CRM en Supabase para probar bandeja y persistencia.
+- La migración del CRM ya fue aplicada en Supabase y se recibió localmente el mensaje de prueba de
+  `5492216001983` mediante el puente temporal desde el CRM anterior.
+- El envío de texto devuelve `Meta (#200): You do not have the necessary permissions to send messages on behalf
+  of this WhatsApp Business Account`. Se verificó por Graph API que el token pertenece a la app `CRM Impress`,
+  tiene los scopes `whatsapp_business_management` / `whatsapp_business_messaging`, el system user `crm-impress`
+  es ADMIN y tiene tarea MANAGE sobre el WABA, la app está suscripta y el número figura CONNECTED/GREEN. El mismo
+  error existe en el CRM anterior desde septiembre: no es un problema de la ventana de 24 h ni del frontend nuevo.
+  Próximo paso: reasignar app + WABA al usuario de sistema desde Meta Business Settings y generar un token permanente
+  nuevo para `CRM Impress`; el control remoto de Chrome está deshabilitado en Work y requiere intervención manual.
+- El CRM ahora bloquea también del lado servidor el texto libre fuera de la ventana de 24 h, deshabilita el botón
+  cuando está cerrada y persiste el payload de error de Meta (incluidos código/subcódigo) para diagnóstico.
 - Meta ya está configurado para IMPRESS: app `CRM Impress` (publicada), negocio verificado `Impress Group`,
   WABA real `Impress Group` y número real `+54 9 221 585-4997` conectado con calidad alta. Existe además una
   cuenta/número de prueba separado; no confundirlo con el real.

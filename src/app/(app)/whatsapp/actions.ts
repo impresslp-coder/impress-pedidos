@@ -102,6 +102,27 @@ export async function enviarMensajeWhatsapp(
       .maybeSingle();
     if (!conversacion) return { ok: false, error: "La conversación ya no existe." };
 
+    const { data: ultimoEntrante, error: errorVentana } = await admin
+      .from("whatsapp_mensajes")
+      .select("creado_en")
+      .eq("conversacion_id", conversacion.id)
+      .eq("tipo", "entrante")
+      .order("creado_en", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (errorVentana) {
+      return { ok: false, error: `No se pudo verificar la ventana de atención: ${errorVentana.message}` };
+    }
+    const inicioVentana = ultimoEntrante?.creado_en ? new Date(ultimoEntrante.creado_en).getTime() : Number.NaN;
+    const ventanaAbierta = Number.isFinite(inicioVentana)
+      && Date.now() - inicioVentana < 24 * 60 * 60 * 1000;
+    if (!ventanaAbierta) {
+      return {
+        ok: false,
+        error: "La ventana de 24 horas está cerrada. Para escribir ahora necesitás una plantilla aprobada por Meta.",
+      };
+    }
+
     const resultado = await enviarTextoWhatsApp(telefono, contenido);
     const ahora = new Date().toISOString();
     const { error: errorRegistro } = await admin.from("whatsapp_mensajes").insert({
@@ -113,7 +134,7 @@ export async function enviarMensajeWhatsapp(
       estado: resultado.ok ? "enviado" : "error",
       proveedor_id: resultado.proveedorId ?? null,
       error_mensaje: resultado.error ?? null,
-      metadata: {},
+      metadata: resultado.data === undefined ? {} : { meta: resultado.data },
       enviado_en: resultado.ok ? ahora : null,
       creado_en: ahora,
     });

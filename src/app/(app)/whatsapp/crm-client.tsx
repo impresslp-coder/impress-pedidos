@@ -305,7 +305,7 @@ export function CrmClient({
               <form onSubmit={enviar} className="border-t border-zinc-200 bg-white p-3">
                 {!ventanaAbierta && (
                   <p className="mb-2 text-xs font-semibold text-amber-700">
-                    Meta puede rechazar texto libre: pasaron más de 24 horas desde el último mensaje del cliente.
+                    La respuesta libre está bloqueada: pasaron más de 24 horas desde el último mensaje del cliente.
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -324,7 +324,7 @@ export function CrmClient({
                     suppressHydrationWarning
                   />
                   <button
-                    disabled={enviando || !texto.trim() || !configurada}
+                    disabled={enviando || !texto.trim() || !configurada || !ventanaAbierta}
                     className="rounded-xl bg-[#1a1a2e] px-5 text-sm font-black text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {enviando ? "Enviando..." : "Enviar"}

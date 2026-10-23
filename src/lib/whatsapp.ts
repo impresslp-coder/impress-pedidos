@@ -31,9 +31,24 @@ export function telefonoWhatsAppValido(telefono: string): boolean {
 
 function mensajeErrorMeta(data: unknown, fallback: string): string {
   if (!data || typeof data !== "object") return fallback;
-  const error = (data as { error?: { message?: unknown; error_user_msg?: unknown } }).error;
-  if (typeof error?.error_user_msg === "string") return error.error_user_msg;
-  if (typeof error?.message === "string") return error.message;
+  const error = (data as {
+    error?: {
+      message?: unknown;
+      error_user_msg?: unknown;
+      code?: unknown;
+      error_subcode?: unknown;
+    };
+  }).error;
+  const detalle = typeof error?.error_user_msg === "string"
+    ? error.error_user_msg
+    : typeof error?.message === "string"
+      ? error.message
+      : fallback;
+  const codigo = typeof error?.code === "number" ? `#${error.code}` : null;
+  const subcodigo = typeof error?.error_subcode === "number" ? `subcódigo ${error.error_subcode}` : null;
+  const identificador = [codigo, subcodigo].filter(Boolean).join(", ");
+  if (identificador) return `Meta (${identificador}): ${detalle.replace(/^\(#\d+\)\s*/, "")}`;
+  if (detalle) return detalle;
   return fallback;
 }
 
