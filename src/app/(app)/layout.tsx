@@ -37,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const navLinks = [
     { href: "/pedidos", label: "Pedidos" },
     { href: "/ventas", label: "Ventas y presupuestos" },
+    { href: "/whatsapp", label: "WhatsApp" },
     { href: "/productos", label: "Productos" },
     { href: "/estadisticas", label: "Estadisticas" },
     ...(esAdmin ? [

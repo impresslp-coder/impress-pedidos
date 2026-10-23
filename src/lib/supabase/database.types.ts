@@ -65,6 +65,135 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_conversaciones: {
+        Row: {
+          id: string
+          telefono: string
+          cliente_id: string | null
+          nombre_contacto: string | null
+          ultimo_mensaje: string | null
+          ultimo_mensaje_en: string | null
+          ultimo_mensaje_tipo: string | null
+          no_leidos: number
+          estado: string
+          asignado_a: string | null
+          etiquetas: string[]
+          metadata: Json
+          creado_en: string
+          actualizado_en: string
+        }
+        Insert: {
+          id?: string
+          telefono: string
+          cliente_id?: string | null
+          nombre_contacto?: string | null
+          ultimo_mensaje?: string | null
+          ultimo_mensaje_en?: string | null
+          ultimo_mensaje_tipo?: string | null
+          no_leidos?: number
+          estado?: string
+          asignado_a?: string | null
+          etiquetas?: string[]
+          metadata?: Json
+          creado_en?: string
+          actualizado_en?: string
+        }
+        Update: {
+          id?: string
+          telefono?: string
+          cliente_id?: string | null
+          nombre_contacto?: string | null
+          ultimo_mensaje?: string | null
+          ultimo_mensaje_en?: string | null
+          ultimo_mensaje_tipo?: string | null
+          no_leidos?: number
+          estado?: string
+          asignado_a?: string | null
+          etiquetas?: string[]
+          metadata?: Json
+          creado_en?: string
+          actualizado_en?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversaciones_asignado_a_fkey"
+            columns: ["asignado_a"]
+            isOneToOne: false
+            referencedRelation: "usuarios_sistema"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversaciones_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_mensajes: {
+        Row: {
+          id: string
+          conversacion_id: string
+          cliente_id: string | null
+          tipo: string
+          tipo_contenido: string
+          contenido: string
+          estado: string
+          proveedor_id: string | null
+          error_mensaje: string | null
+          metadata: Json
+          enviado_en: string | null
+          recibido_en: string | null
+          creado_en: string
+        }
+        Insert: {
+          id?: string
+          conversacion_id: string
+          cliente_id?: string | null
+          tipo: string
+          tipo_contenido?: string
+          contenido: string
+          estado?: string
+          proveedor_id?: string | null
+          error_mensaje?: string | null
+          metadata?: Json
+          enviado_en?: string | null
+          recibido_en?: string | null
+          creado_en?: string
+        }
+        Update: {
+          id?: string
+          conversacion_id?: string
+          cliente_id?: string | null
+          tipo?: string
+          tipo_contenido?: string
+          contenido?: string
+          estado?: string
+          proveedor_id?: string | null
+          error_mensaje?: string | null
+          metadata?: Json
+          enviado_en?: string | null
+          recibido_en?: string | null
+          creado_en?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_mensajes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_mensajes_conversacion_id_fkey"
+            columns: ["conversacion_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       anillado_rangos: {
         Row: {
           activo: boolean | null
