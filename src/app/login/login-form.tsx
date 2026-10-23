@@ -14,7 +14,7 @@ function SubmitButton() {
       type="submit"
       disabled={pending}
       suppressHydrationWarning
-      className="w-full rounded-md bg-black px-3 py-2.5 text-sm font-black text-[#fff200] transition hover:bg-zinc-900 disabled:opacity-60"
+      className="w-full rounded-md bg-[#087fbd] px-3 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#066a9f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#087fbd] disabled:opacity-60"
     >
       {pending ? "Ingresando..." : "Ingresar"}
     </button>
