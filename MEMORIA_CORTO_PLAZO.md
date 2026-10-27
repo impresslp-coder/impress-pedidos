@@ -10,6 +10,13 @@
 
 ### WhatsApp CRM (2026-10-23, rama `codex/crm-wsp`)
 
+- Publicación preparada el 2026-10-27 sobre el `main` remoto actualizado:
+  - los dos commits del CRM se integraron sobre `origin/main` en un worktree limpio, sin incluir cambios locales ajenos;
+  - `npm run build` terminó correctamente y generó la ruta `/api/whatsapp/webhook`;
+  - las ocho variables `META_*` / `WHATSAPP_*` se cargaron en Production del proyecto Vercel `impress-pedidos`;
+  - el token permanente y el App Secret se validaron contra la app `CRM Impress` y el número real `+54 9 221 585-4997`;
+  - falta apuntar el callback de Meta al endpoint productivo y comprobar recepción + respuesta dentro de una ventana nueva de 24 h.
+
 - Primera versión implementada y con build de producción exitoso:
   - bandeja `/whatsapp` inspirada en Amedex, adaptada a clientes y pedidos;
   - conversaciones, no leídos, búsqueda, historial, estados de Meta y ventana de 24 h;
