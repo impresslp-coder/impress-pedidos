@@ -39,6 +39,7 @@ export async function updateSession(request: NextRequest) {
     ["/api/print-queue", "/api/print-operator", "/api/print-events"].includes(pathname) ||
     pathname.startsWith("/api/cron/") ||
     pathname.startsWith("/api/wc/") ||
+    pathname === "/api/whatsapp/webhook" ||
     esPdfConClave;
   const esRutaPublica =
     pathname === "/login" ||
