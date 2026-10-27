@@ -58,6 +58,14 @@
   `Client Business Cannot Be Accessed`; hace falta que un administrador del negocio propietario asigne esa
   cuenta/activo a `crm-impress` (o genere desde Business Settings un token de ese system user) antes de
   sustituir `META_WHATSAPP_TOKEN` en Vercel.
+- Verificación posterior: el token nuevo de `crm-impress` sí tiene los scopes de mensajería, acceso de lectura
+  a la Paid Message Account y el número está `CONNECTED`/`LIVE`, pero Meta aún rechaza el POST de texto con
+  `#10`/`2593181`. La causa es de ownership/partner del activo, no de código ni de la ventana de 24 h:
+  el business `1349106760643734` sólo posee el WABA de prueba, mientras el número real también figura en la
+  Paid Message Account `1018262924392667` (con proveedores históricos Karix/Anantya). Un administrador del
+  negocio propietario debe terminar la migración/desvinculación del proveedor o compartir/asignar la cuenta
+  de mensajería al business de Impress con permiso de envío. Hasta eso, cualquier CRM/token seguirá pudiendo
+  recibir webhooks pero Meta negará los mensajes salientes.
 
 - **Botón "Impresiones personales"** en `/pedidos/nuevo/pedido` — recuperado desde un stash viejo perdido
   (ver `MEMORIA_LARGO_PLAZO.md`). Reimplementado a mano sobre la versión actual del form, verificado con
