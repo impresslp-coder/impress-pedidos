@@ -51,6 +51,13 @@
   WABA real `Impress Group` y número real `+54 9 221 585-4997` conectado con calidad alta. Existe además una
   cuenta/número de prueba separado; no confundirlo con el real.
 - Las credenciales que se deben migrar son las del proyecto Vercel `impress-crm`, no las de Amedex.
+- Diagnóstico de envío actualizado el 2026-10-27: la recepción del webhook funciona y el token vigente es
+  válido para la app `CRM Impress`, pero pertenece al system user `Employee` (`122112446385481282`). Meta
+  rechaza el envío con `#10` porque ese token no puede acceder a la Paid Message Account
+  `1018262924392667`. La generación por API de un token para `crm-impress` fue rechazada por Meta con
+  `Client Business Cannot Be Accessed`; hace falta que un administrador del negocio propietario asigne esa
+  cuenta/activo a `crm-impress` (o genere desde Business Settings un token de ese system user) antes de
+  sustituir `META_WHATSAPP_TOKEN` en Vercel.
 
 - **Botón "Impresiones personales"** en `/pedidos/nuevo/pedido` — recuperado desde un stash viejo perdido
   (ver `MEMORIA_LARGO_PLAZO.md`). Reimplementado a mano sobre la versión actual del form, verificado con
